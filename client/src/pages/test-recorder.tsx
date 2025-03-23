@@ -124,6 +124,17 @@ export default function TestRecorder() {
         throw new Error("Failed to start recording");
       }
       
+      // Notify all connected WebSocket clients that recording has started
+      if (connected) {
+        sendMessage({
+          type: 'RECORDING_STATUS',
+          isRecording: true,
+          testName,
+          targetUrl,
+          browser
+        });
+      }
+      
       showToast("Recording started. Interact with the embedded browser");
     } catch (error) {
       showToast("Failed to start recording");
@@ -140,6 +151,15 @@ export default function TestRecorder() {
       
       if (!response.ok) {
         throw new Error("Failed to stop recording");
+      }
+      
+      // Notify all connected WebSocket clients that recording has stopped
+      if (connected) {
+        sendMessage({
+          type: 'RECORDING_STATUS',
+          isRecording: false,
+          steps: recordedSteps
+        });
       }
       
       setIsRecording(false);
@@ -386,20 +406,45 @@ export default function TestRecorder() {
       }
       
       if (step && !recordedSteps.includes(step)) {
+        // Add to local state
         setRecordedSteps(prev => [...prev, step]);
+        
+        // Send to WebSocket server for broadcasting to all clients
+        if (connected) {
+          sendMessage({
+            type: 'RECORD_ACTION',
+            action: step
+          });
+        }
+        
         showToast(`Recorded: ${step}`);
       }
     };
     
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [isRecording, recordedSteps]);
+  }, [isRecording, recordedSteps, connected, sendMessage]);
 
   return (
     <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-800">Test Recorder</h1>
-        <p className="text-slate-500 mt-1">Record browser interactions and create automated tests</p>
+      <div className="mb-6 flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Test Recorder</h1>
+          <p className="text-slate-500 mt-1">Record browser interactions and create automated tests</p>
+        </div>
+        <div className="flex items-center">
+          {connected ? (
+            <div className="flex items-center text-green-600">
+              <div className="w-2 h-2 bg-green-600 rounded-full mr-2 animate-pulse"></div>
+              <span className="text-sm">Connected</span>
+            </div>
+          ) : (
+            <div className="flex items-center text-red-500">
+              <div className="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
+              <span className="text-sm">Disconnected</span>
+            </div>
+          )}
+        </div>
       </div>
       
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
