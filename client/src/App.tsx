@@ -33,8 +33,19 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <UserProvider>
         <MainLayout>
-          <Router />
+          <Switch>
+            <Route path="/recorder" component={() => null} />
+            <Route>
+              <Router />
+            </Route>
+          </Switch>
         </MainLayout>
+        <Switch>
+          <Route path="/recorder" component={TestRecorder} />
+          <Route>
+            {null}
+          </Route>
+        </Switch>
         <Toaster />
       </UserProvider>
     </QueryClientProvider>

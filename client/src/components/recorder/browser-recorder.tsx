@@ -1,8 +1,9 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RecordedSteps } from "@/components/recorder/recorded-steps";
+import { EmbeddedBrowser } from "@/components/recorder/embedded-browser";
 import { 
   Play, 
   Square, 
@@ -11,14 +12,7 @@ import {
   Upload, 
   Download, 
   Settings,
-  Trash2,
-  Mouse,
-  MousePointer,
-  Keyboard,
-  FileText,
-  Eye,
-  ArrowRight,
-  Plus
+  Trash2
 } from "lucide-react";
 import {
   Select,
@@ -32,35 +26,17 @@ import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogClose
-} from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
 
 export function BrowserRecorder() {
   const { toast } = useToast();
   const [testName, setTestName] = useState("");
-  const [targetUrl, setTargetUrl] = useState("");
+  const [targetUrl, setTargetUrl] = useState("https://example.com");
   const [browser, setBrowser] = useState("Chrome");
   const [isRecording, setIsRecording] = useState(false);
   const [recordedSteps, setRecordedSteps] = useState<string[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeTab, setActiveTab] = useState("recorder");
-  
-  // User action recording
-  const [actionDialogOpen, setActionDialogOpen] = useState(false);
-  const [actionType, setActionType] = useState<string>("");
-  const [selectorValue, setSelectorValue] = useState("");
-  const [textValue, setTextValue] = useState("");
-  const [urlValue, setUrlValue] = useState("");
-  const [waitValue, setWaitValue] = useState("");
-  const [assertValue, setAssertValue] = useState("");
+  const [showBrowser, setShowBrowser] = useState(false);
   
   const handleStartRecording = async () => {
     if (!testName) {
@@ -83,18 +59,18 @@ export function BrowserRecorder() {
     
     try {
       setIsRecording(true);
-      const response = await apiRequest("POST", "/api/recorder/start", {
+      setShowBrowser(true);
+      setRecordedSteps([`Navigate to ${targetUrl}`]);
+      
+      await apiRequest("POST", "/api/recorder/start", {
         testName,
         targetUrl,
         browser,
       });
       
-      // Initialize with the first navigation step
-      setRecordedSteps([`Navigate to ${targetUrl}`]);
-      
       toast({
         title: "Recording started",
-        description: "Add steps manually using the 'Add Action' button",
+        description: "Interact with the embedded browser to record actions",
       });
     } catch (error) {
       toast({
@@ -135,6 +111,8 @@ export function BrowserRecorder() {
     
     try {
       setIsPlaying(true);
+      setShowBrowser(true);
+      
       await apiRequest("POST", "/api/recorder/play", {
         testName,
         browser,
@@ -244,60 +222,37 @@ export function BrowserRecorder() {
     }
   };
 
-  const openActionDialog = (type: string) => {
-    setActionType(type);
-    setSelectorValue("");
-    setTextValue("");
-    setUrlValue("");
-    setWaitValue("");
-    setAssertValue("");
-    setActionDialogOpen(true);
-  };
-
-  const handleAddAction = () => {
-    let step = "";
+  const handleBrowserAction = (action: {type: string; selector: string; value?: string; text?: string}) => {
+    let stepDescription = "";
     
-    switch (actionType) {
+    switch (action.type) {
       case "click":
-        if (!selectorValue) return;
-        step = textValue 
-          ? `Click on "${textValue}" (${selectorValue})`
-          : `Click on ${selectorValue}`;
+        stepDescription = action.text
+          ? `Click on "${action.text}" (${action.selector})`
+          : `Click on ${action.selector}`;
         break;
-      case "type":
-        if (!selectorValue || !textValue) return;
-        step = `Type "${textValue}" in ${selectorValue}`;
+      case "input":
+        if (!action.value) return;
+        stepDescription = `Type "${action.value}" in ${action.selector}`;
         break;
       case "navigate":
-        if (!urlValue) return;
-        step = `Navigate to ${urlValue}`;
+        if (!action.value) return;
+        stepDescription = `Navigate to ${action.value}`;
         break;
-      case "wait":
-        if (!waitValue) return;
-        step = waitValue.includes("selector") 
-          ? `Wait for ${selectorValue} to be visible`
-          : waitValue === "navigation"
-          ? "Wait for navigation"
-          : `Wait for ${waitValue} ms`;
-        break;
-      case "assert":
-        if (!assertValue) return;
-        step = assertValue.includes("visible")
-          ? `Assert ${selectorValue} is visible`
-          : assertValue.includes("count")
-          ? `Assert ${selectorValue} count > 0`
-          : `Assert URL contains "${textValue}"`;
+      case "submit":
+        stepDescription = `Submit form ${action.selector}`;
         break;
       default:
         return;
     }
     
-    if (step) {
-      setRecordedSteps([...recordedSteps, step]);
-      setActionDialogOpen(false);
+    if (stepDescription && !recordedSteps.includes(stepDescription)) {
+      setRecordedSteps(prev => [...prev, stepDescription]);
+      
       toast({
-        title: "Step added",
-        description: `Added: ${step}`
+        title: "Action recorded",
+        description: stepDescription,
+        duration: 2000,
       });
     }
   };
@@ -311,16 +266,16 @@ export function BrowserRecorder() {
             Record, play, and manage browser automation tests
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid grid-cols-2 mb-6">
               <TabsTrigger value="recorder">Recorder</TabsTrigger>
               <TabsTrigger value="settings">Settings</TabsTrigger>
             </TabsList>
             
-            <TabsContent value="recorder" className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
+            <TabsContent value="recorder">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div className="space-y-6">
                   <div className="space-y-4">
                     <div>
                       <Label htmlFor="fullTestName">Test Name</Label>
@@ -365,7 +320,7 @@ export function BrowserRecorder() {
                     </div>
                   </div>
                   
-                  <div className="flex items-center justify-between mt-6">
+                  <div className="flex items-center justify-between">
                     <div className="space-x-2">
                       <Button
                         variant={isRecording ? "destructive" : "outline"}
@@ -404,85 +359,64 @@ export function BrowserRecorder() {
                       </Button>
                     </div>
                   </div>
-                </div>
-                
-                <div className="border rounded-lg overflow-hidden">
-                  <div className="bg-slate-100 px-3 py-2 border-b flex items-center justify-between">
-                    <h3 className="text-sm font-medium text-slate-700">Recorded Steps</h3>
-                    <div className="flex items-center space-x-1">
-                      {isRecording && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8"
-                          onClick={() => setActionDialogOpen(true)}
-                        >
-                          <Plus className="h-3 w-3 mr-1" /> Add Action
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={handleExportSteps}
-                        disabled={recordedSteps.length === 0 || isRecording || isPlaying}
-                      >
-                        <Download className="h-4 w-4 text-slate-500" />
-                      </Button>
-                      <div className="relative">
-                        <input
-                          type="file"
-                          id="importFile"
-                          accept=".json"
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                          onChange={handleImportSteps}
-                          disabled={isRecording || isPlaying}
-                        />
+                  
+                  {/* Recorded Steps Panel */}
+                  <div className="border rounded-lg overflow-hidden">
+                    <div className="bg-slate-100 px-3 py-2 border-b flex items-center justify-between">
+                      <h3 className="text-sm font-medium text-slate-700">Recorded Steps</h3>
+                      <div className="flex items-center space-x-1">
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          disabled={isRecording || isPlaying}
+                          onClick={handleExportSteps}
+                          disabled={recordedSteps.length === 0 || isRecording || isPlaying}
                         >
-                          <Upload className="h-4 w-4 text-slate-500" />
+                          <Download className="h-4 w-4 text-slate-500" />
+                        </Button>
+                        <div className="relative">
+                          <input
+                            type="file"
+                            id="importFile"
+                            accept=".json"
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            onChange={handleImportSteps}
+                            disabled={isRecording || isPlaying}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            disabled={isRecording || isPlaying}
+                          >
+                            <Upload className="h-4 w-4 text-slate-500" />
+                          </Button>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={handleClearSteps}
+                          disabled={recordedSteps.length === 0 || isRecording || isPlaying}
+                        >
+                          <RefreshCw className="h-4 w-4 text-slate-500" />
                         </Button>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={handleClearSteps}
-                        disabled={recordedSteps.length === 0 || isRecording || isPlaying}
-                      >
-                        <RefreshCw className="h-4 w-4 text-slate-500" />
-                      </Button>
                     </div>
+                    <RecordedSteps steps={recordedSteps} height="h-[200px]" />
                   </div>
-                  <RecordedSteps steps={recordedSteps} height="h-[400px]" />
-
-                  {isRecording && (
-                    <div className="p-3 border-t bg-slate-50">
-                      <p className="text-sm text-center mb-2 text-slate-600 font-medium">Add Action:</p>
-                      <div className="grid grid-cols-5 gap-2">
-                        <Button variant="outline" size="sm" onClick={() => openActionDialog("click")}>
-                          <MousePointer className="h-3 w-3 mr-1" /> Click
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => openActionDialog("type")}>
-                          <Keyboard className="h-3 w-3 mr-1" /> Type
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => openActionDialog("navigate")}>
-                          <ArrowRight className="h-3 w-3 mr-1" /> Navigate
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => openActionDialog("wait")}>
-                          <FileText className="h-3 w-3 mr-1" /> Wait
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => openActionDialog("assert")}>
-                          <Eye className="h-3 w-3 mr-1" /> Assert
-                        </Button>
-                      </div>
-                    </div>
-                  )}
                 </div>
+                
+                {/* Embedded Browser */}
+                {(showBrowser || isRecording || isPlaying) && (
+                  <div className="order-first xl:order-none">
+                    <EmbeddedBrowser 
+                      targetUrl={targetUrl} 
+                      isRecording={isRecording} 
+                      onAction={handleBrowserAction}
+                    />
+                  </div>
+                )}
               </div>
             </TabsContent>
             
@@ -539,125 +473,6 @@ export function BrowserRecorder() {
           </Tabs>
         </CardContent>
       </Card>
-
-      {/* Action Dialog */}
-      <Dialog open={actionDialogOpen} onOpenChange={setActionDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {actionType === "click" && "Add Click Action"}
-              {actionType === "type" && "Add Type Action"}
-              {actionType === "navigate" && "Add Navigation Action"}
-              {actionType === "wait" && "Add Wait Action"}
-              {actionType === "assert" && "Add Assertion"}
-            </DialogTitle>
-            <DialogDescription>
-              {actionType === "click" && "Add a click interaction on an element"}
-              {actionType === "type" && "Add text input to a form field"}
-              {actionType === "navigate" && "Navigate to a URL"}
-              {actionType === "wait" && "Wait for an element or event"}
-              {actionType === "assert" && "Add a verification step"}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            {(actionType === "click" || actionType === "type" || (actionType === "wait" && waitValue === "selector") || (actionType === "assert" && assertValue.includes("selector"))) && (
-              <div>
-                <Label htmlFor="selector">CSS Selector</Label>
-                <Input
-                  id="selector"
-                  placeholder="#id, .class, tag[attr]"
-                  value={selectorValue}
-                  onChange={(e) => setSelectorValue(e.target.value)}
-                />
-                <p className="text-xs text-slate-500 mt-1">
-                  Examples: #loginButton, .form-input, button[type="submit"]
-                </p>
-              </div>
-            )}
-
-            {(actionType === "click" || actionType === "type" || (actionType === "assert" && assertValue === "url")) && (
-              <div>
-                <Label htmlFor="text">
-                  {actionType === "click" ? "Button/Link Text (optional)" : 
-                   actionType === "type" ? "Text to Type" :
-                   "Text to Assert"}
-                </Label>
-                <Input
-                  id="text"
-                  placeholder={actionType === "click" ? "Login" : actionType === "type" ? "username@example.com" : "dashboard"}
-                  value={textValue}
-                  onChange={(e) => setTextValue(e.target.value)}
-                />
-              </div>
-            )}
-
-            {actionType === "navigate" && (
-              <div>
-                <Label htmlFor="url">URL</Label>
-                <Input
-                  id="url"
-                  placeholder="https://example.com/path"
-                  value={urlValue}
-                  onChange={(e) => setUrlValue(e.target.value)}
-                />
-              </div>
-            )}
-
-            {actionType === "wait" && (
-              <div>
-                <Label htmlFor="waitType">Wait Type</Label>
-                <Select value={waitValue} onValueChange={setWaitValue}>
-                  <SelectTrigger id="waitType">
-                    <SelectValue placeholder="Select what to wait for" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="selector">Element to be visible</SelectItem>
-                    <SelectItem value="navigation">Navigation to complete</SelectItem>
-                    <SelectItem value="timeout">Timeout (ms)</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                {waitValue === "timeout" && (
-                  <div className="mt-4">
-                    <Label htmlFor="timeoutValue">Timeout (milliseconds)</Label>
-                    <Input
-                      id="timeoutValue"
-                      type="number"
-                      placeholder="1000"
-                      value={waitValue}
-                      onChange={(e) => setWaitValue(e.target.value)}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {actionType === "assert" && (
-              <div>
-                <Label htmlFor="assertType">Assertion Type</Label>
-                <Select value={assertValue} onValueChange={setAssertValue}>
-                  <SelectTrigger id="assertType">
-                    <SelectValue placeholder="Select assertion type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="selector-visible">Element is visible</SelectItem>
-                    <SelectItem value="selector-count">Element count</SelectItem>
-                    <SelectItem value="url">URL contains text</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
-            </DialogClose>
-            <Button onClick={handleAddAction}>Add Step</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }
