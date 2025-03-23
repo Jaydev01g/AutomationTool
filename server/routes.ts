@@ -259,48 +259,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   
   // Set up WebSocket server for real-time communication with browser
-  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  const wss = new WebSocketServer({ 
+    server: httpServer, 
+    path: '/ws',
+    clientTracking: true 
+  });
   
-  wss.on('connection', (ws) => {
-    console.log('WebSocket client connected');
+  console.log('WebSocket server initialized and waiting for connections on path: /ws');
+  
+  wss.on('connection', (ws, req) => {
+    console.log(`WebSocket client connected from ${req.socket.remoteAddress}`);
+    console.log(`Total connected clients: ${wss.clients.size}`);
     
+    // Listen for messages from client
     ws.on('message', (message) => {
       try {
         const data = JSON.parse(message.toString());
-        console.log('Received message:', data);
+        console.log('Received WebSocket message:', data);
         
         // Handle different message types
         if (data.type === 'RECORD_ACTION') {
           // Record browser action
           if (data.action) {
+            console.log('Recording action:', data.action);
             recorder.recordedSteps.push(data.action);
             
             // Broadcast to all clients
+            let broadcastCount = 0;
             wss.clients.forEach((client) => {
               if (client.readyState === WebSocket.OPEN) {
                 client.send(JSON.stringify({
                   type: 'ACTION_RECORDED',
                   action: data.action
                 }));
+                broadcastCount++;
               }
             });
+            console.log(`Broadcasted action to ${broadcastCount} clients`);
           }
+        } else if (data.type === 'PING') {
+          // Respond to ping with pong
+          ws.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() }));
+        } else if (data.type === 'RECORDING_STATUS') {
+          // Update recording status
+          console.log('Recording status updated:', data.isRecording);
+          
+          // Broadcast recording status to all clients
+          wss.clients.forEach((client) => {
+            if (client !== ws && client.readyState === WebSocket.OPEN) {
+              client.send(JSON.stringify({
+                type: 'RECORDING_STATUS_CHANGED',
+                isRecording: data.isRecording,
+                testName: data.testName,
+                targetUrl: data.targetUrl,
+                browser: data.browser
+              }));
+            }
+          });
         }
       } catch (error) {
         console.error('Error handling WebSocket message:', error);
       }
     });
     
-    ws.on('close', () => {
-      console.log('WebSocket client disconnected');
+    // Listen for connection close
+    ws.on('close', (code, reason) => {
+      console.log(`WebSocket client disconnected: Code: ${code}, Reason: ${reason.toString()}`);
+      console.log(`Remaining connected clients: ${wss.clients.size}`);
     });
     
-    // Send initial state
-    ws.send(JSON.stringify({
-      type: 'INIT',
-      isRecording: recorder.isRecording,
-      steps: recorder.recordedSteps
-    }));
+    // Listen for errors
+    ws.on('error', (error) => {
+      console.error('WebSocket error:', error);
+    });
+    
+    // Send initial state to the newly connected client
+    try {
+      const initialMessage = JSON.stringify({
+        type: 'INIT',
+        isRecording: recorder.isRecording,
+        steps: recorder.recordedSteps
+      });
+      ws.send(initialMessage);
+      console.log('Sent initial state to client:', initialMessage);
+    } catch (error) {
+      console.error('Error sending initial state to client:', error);
+    }
+  });
+  
+  // Handle server-level errors
+  wss.on('error', (error) => {
+    console.error('WebSocket server error:', error);
+  });
+  
+  // Log when the server closes
+  wss.on('close', () => {
+    console.log('WebSocket server closed');
   });
 
   return httpServer;

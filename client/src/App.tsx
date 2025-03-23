@@ -8,13 +8,13 @@ import TestRecorder from "@/pages/test-recorder";
 import LandingPage from "@/pages/landing-page";
 import ProjectDashboard from "@/pages/project-dashboard";
 
-// Import with capitalized versions to prevent typescript errors
-import Dashboard from "@/pages/Dashboard";
+// Import with consistent casing to prevent typescript errors
+import Dashboard from "@/pages/dashboard";
 import TestCases from "@/pages/test-cases";
 import TestSuites from "@/pages/test-suites";
-import Reports from "@/pages/Reports";
+import Reports from "@/pages/reports";
 import ExecutionHistory from "@/pages/execution-history";
-import Settings from "@/pages/Settings";
+import Settings from "@/pages/settings";
 import MainLayout from "@/components/layout/main-layout";
 
 function App() {
@@ -30,6 +30,11 @@ function App() {
           
           {/* Test Recorder is rendered outside of MainLayout */}
           <Route path="/recorder">
+            <TestRecorder />
+          </Route>
+          
+          {/* Add an alias for the recorder at /test-recorder */}
+          <Route path="/test-recorder">
             <TestRecorder />
           </Route>
           
