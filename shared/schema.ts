@@ -1,128 +1,137 @@
-import { pgTable, text, serial, integer, timestamp, jsonb, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, jsonb, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Test Suite schema
-export const testSuites = pgTable("test_suites", {
+// Users table
+export const users = pgTable("users", {
   id: serial("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  password: text("password").notNull(),
   name: text("name").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  role: text("role").notNull(),
+  avatarUrl: text("avatar_url"),
 });
 
-export const insertTestSuiteSchema = createInsertSchema(testSuites).pick({
+export const insertUserSchema = createInsertSchema(users).pick({
+  username: true,
+  password: true,
   name: true,
+  role: true,
+  avatarUrl: true,
 });
 
-// Test schema
+// Test cases table
 export const tests = pgTable("tests", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  suiteId: integer("suite_id").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  lastRun: timestamp("last_run"),
+  description: text("description"),
+  targetUrl: text("target_url").notNull(),
+  browser: text("browser").notNull(),
+  steps: jsonb("steps").notNull(),
   lastStatus: text("last_status"),
+  lastRun: text("last_run"),
+  userId: integer("user_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const insertTestSchema = createInsertSchema(tests).pick({
   name: true,
-  suiteId: true,
-});
-
-// Test Step schema
-export const testSteps = pgTable("test_steps", {
-  id: serial("id").primaryKey(),
-  testId: integer("test_id").notNull(),
-  type: text("type").notNull(), // navigate, click, type, verify, wait, scroll
-  order: integer("order").notNull(),
-  selector: text("selector"),
-  text: text("text"),
-  url: text("url"),
-  condition: text("condition"), // exists, visible, contains, value
-  duration: integer("duration"), // for wait steps
-  direction: text("direction"), // for scroll steps
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-export const insertTestStepSchema = createInsertSchema(testSteps).pick({
-  testId: true,
-  type: true,
-  order: true,
-  selector: true,
-  text: true,
-  url: true,
-  condition: true,
-  duration: true,
-  direction: true,
-});
-
-// Test Run schema
-export const testRuns = pgTable("test_runs", {
-  id: serial("id").primaryKey(),
-  status: text("status").notNull(), // running, completed, failed
-  startTime: timestamp("start_time").defaultNow().notNull(),
-  endTime: timestamp("end_time"),
-  totalTests: integer("total_tests").notNull(),
-  completedTests: integer("completed_tests").default(0).notNull(),
-  passedTests: integer("passed_tests").default(0).notNull(),
-  failedTests: integer("failed_tests").default(0).notNull(),
-});
-
-export const insertTestRunSchema = createInsertSchema(testRuns).pick({
-  status: true,
-  totalTests: true,
-});
-
-// Test Run Results schema
-export const testResults = pgTable("test_results", {
-  id: serial("id").primaryKey(),
-  runId: integer("run_id").notNull(),
-  testId: integer("test_id").notNull(),
-  passed: integer("passed").notNull(),
-  failed: integer("failed").notNull(),
-  duration: integer("duration").notNull(), // in milliseconds
-  steps: jsonb("steps").notNull(), // array of step results
-  error: jsonb("error"), // error details if any
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-export const insertTestResultSchema = createInsertSchema(testResults).pick({
-  runId: true,
-  testId: true,
-  passed: true,
-  failed: true,
-  duration: true,
+  description: true,
+  targetUrl: true,
+  browser: true,
   steps: true,
-  error: true,
+  userId: true,
 });
 
-// Settings schema
-export const settings = pgTable("settings", {
+// Test suites table
+export const testSuites = pgTable("test_suites", {
   id: serial("id").primaryKey(),
-  key: text("key").notNull().unique(),
-  value: jsonb("value").notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  testIds: jsonb("test_ids").notNull(),
+  userId: integer("user_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertSettingSchema = createInsertSchema(settings).pick({
-  key: true,
-  value: true,
+export const insertTestSuiteSchema = createInsertSchema(testSuites).pick({
+  name: true,
+  description: true,
+  testIds: true,
+  userId: true,
 });
 
-// Export types
-export type TestSuite = typeof testSuites.$inferSelect;
-export type InsertTestSuite = z.infer<typeof insertTestSuiteSchema>;
+// Test executions table
+export const testExecutions = pgTable("test_executions", {
+  id: serial("id").primaryKey(),
+  testId: integer("test_id"),
+  testName: text("test_name").notNull(),
+  browser: text("browser").notNull(),
+  status: text("status").notNull(),
+  duration: text("duration").notNull(),
+  logs: jsonb("logs"),
+  screenshots: jsonb("screenshots"),
+  userId: integer("user_id"),
+  executedAt: timestamp("executed_at").defaultNow().notNull(),
+});
+
+export const insertTestExecutionSchema = createInsertSchema(testExecutions).pick({
+  testId: true,
+  testName: true,
+  browser: true,
+  status: true,
+  duration: true,
+  logs: true,
+  screenshots: true,
+  userId: true,
+});
+
+// Type definitions
+export type User = typeof users.$inferSelect;
+export type InsertUser = z.infer<typeof insertUserSchema>;
 
 export type Test = typeof tests.$inferSelect;
 export type InsertTest = z.infer<typeof insertTestSchema>;
 
-export type TestStep = typeof testSteps.$inferSelect;
-export type InsertTestStep = z.infer<typeof insertTestStepSchema>;
+export type TestSuite = typeof testSuites.$inferSelect & {
+  testCount: number;
+  successRate: number;
+  lastRun: string;
+};
+export type InsertTestSuite = z.infer<typeof insertTestSuiteSchema>;
 
-export type TestRun = typeof testRuns.$inferSelect;
-export type InsertTestRun = z.infer<typeof insertTestRunSchema>;
+export type TestExecution = typeof testExecutions.$inferSelect & {
+  lastRun?: string;
+};
+export type InsertTestExecution = z.infer<typeof insertTestExecutionSchema>;
 
-export type TestResult = typeof testResults.$inferSelect;
-export type InsertTestResult = z.infer<typeof insertTestResultSchema>;
+// Additional types for API responses
+export type TestSuiteStatus = {
+  id: number;
+  name: string;
+  successRate: number;
+  passed: number;
+  failed: number;
+  lastRun: string;
+};
 
-export type Setting = typeof settings.$inferSelect;
-export type InsertSetting = z.infer<typeof insertSettingSchema>;
+export type DashboardMetrics = {
+  testCases: number;
+  testCasesTrend: number;
+  successRate: number;
+  successRateTrend: number;
+  failedTests: number;
+  failedTestsTrend: number;
+  avgExecutionTime: number;
+  executionTimeTrend: number;
+};
+
+export type ReportSummary = {
+  totalTests: number;
+  passed: number;
+  failed: number;
+  passRate: number;
+  failRate: number;
+  avgDuration: string;
+};

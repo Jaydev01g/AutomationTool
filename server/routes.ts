@@ -1,485 +1,261 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { WebSocket, WebSocketServer } from "ws";
-import { startBrowser, stopBrowser, recordActions, playbackTest } from "./puppeteer";
+import { recorder } from "./recorder";
+import { insertTestSchema, insertTestExecutionSchema } from "@shared/schema";
 import { z } from "zod";
-import { insertTestSchema, insertTestSuiteSchema, insertTestStepSchema } from "@shared/schema";
+import { ZodError } from "zod";
+import { fromZodError } from 'zod-validation-error';
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  const httpServer = createServer(app);
-  
-  // Create WebSocket server for real-time communication
-  const wss = new WebSocketServer({ 
-    server: httpServer,
-    path: '/api/recording/ws',
-    // Allow all origins
-    verifyClient: (info) => {
-      return true;
-    }
-  });
-  
-  console.log("WebSocket server initialized at /api/recording/ws");
-  
-  // Store connected clients
-  const clients = new Set<WebSocket>();
-  
-  wss.on('connection', (ws, req) => {
-    console.log(`WebSocket client connected from ${req.socket.remoteAddress}`);
-    clients.add(ws);
-    
-    // Send a welcome message to confirm connection
-    ws.send(JSON.stringify({
-      type: 'connection',
-      message: 'Connected to recording server'
-    }));
-    
-    ws.on('message', (message) => {
-      console.log('Received message:', message.toString());
-    });
-    
-    ws.on('close', () => {
-      console.log('WebSocket client disconnected');
-      clients.delete(ws);
-    });
-    
-    ws.on('error', (error) => {
-      console.error('WebSocket error:', error);
-    });
-  });
-  
-  wss.on('error', (error) => {
-    console.error('WebSocket server error:', error);
-  });
-  
-  // Broadcast to all clients
-  const broadcast = (message: any) => {
-    clients.forEach(client => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify(message));
-      }
-    });
-  };
-  
-  // Test Suites API
-  app.get('/api/test-suites', async (req, res) => {
-    const suites = await storage.getTestSuites();
-    res.json(suites);
-  });
-  
-  app.post('/api/test-suites', async (req, res) => {
+  // API routes for tests
+  app.get("/api/tests", async (req, res) => {
     try {
-      const data = insertTestSuiteSchema.parse(req.body);
-      const suite = await storage.createTestSuite(data);
-      res.status(201).json(suite);
+      const tests = await storage.getAllTests();
+      res.json(tests);
     } catch (error) {
-      res.status(400).json({ message: 'Invalid request data' });
+      res.status(500).json({ message: "Failed to fetch tests" });
     }
   });
-  
-  app.get('/api/test-suites/:id', async (req, res) => {
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ message: 'Invalid ID' });
+
+  app.get("/api/tests/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const test = await storage.getTest(id);
+      
+      if (!test) {
+        return res.status(404).json({ message: "Test not found" });
+      }
+      
+      res.json(test);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch test" });
     }
-    
-    const suite = await storage.getTestSuite(id);
-    if (!suite) {
-      return res.status(404).json({ message: 'Test suite not found' });
-    }
-    
-    res.json(suite);
   });
-  
-  // Tests API
-  app.get('/api/tests', async (req, res) => {
-    const tests = await storage.getTests();
-    res.json(tests);
-  });
-  
-  app.post('/api/tests', async (req, res) => {
+
+  app.post("/api/tests", async (req, res) => {
     try {
       const data = insertTestSchema.parse(req.body);
       const test = await storage.createTest(data);
+      res.status(201).json(test);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ message: validationError.message });
+      }
+      res.status(500).json({ message: "Failed to create test" });
+    }
+  });
+
+  app.put("/api/tests/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const data = insertTestSchema.parse(req.body);
+      const test = await storage.updateTest(id, data);
       
-      // Create steps if provided
-      if (req.body.steps && Array.isArray(req.body.steps)) {
-        for (const step of req.body.steps) {
-          await storage.createTestStep({
-            ...step,
-            testId: test.id
-          });
-        }
+      if (!test) {
+        return res.status(404).json({ message: "Test not found" });
       }
       
-      const testWithSteps = await storage.getTest(test.id);
-      res.status(201).json(testWithSteps);
-    } catch (error) {
-      res.status(400).json({ message: 'Invalid request data' });
-    }
-  });
-  
-  app.get('/api/tests/:id', async (req, res) => {
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ message: 'Invalid ID' });
-    }
-    
-    const test = await storage.getTest(id);
-    if (!test) {
-      return res.status(404).json({ message: 'Test not found' });
-    }
-    
-    res.json(test);
-  });
-  
-  app.patch('/api/tests/:id', async (req, res) => {
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ message: 'Invalid ID' });
-    }
-    
-    const test = await storage.updateTest(id, req.body);
-    if (!test) {
-      return res.status(404).json({ message: 'Test not found' });
-    }
-    
-    res.json(test);
-  });
-  
-  // Test Steps API
-  app.post('/api/tests/:testId/steps', async (req, res) => {
-    const testId = parseInt(req.params.testId);
-    if (isNaN(testId)) {
-      return res.status(400).json({ message: 'Invalid test ID' });
-    }
-    
-    try {
-      const data = {
-        ...req.body,
-        testId
-      };
-      
-      const step = await storage.createTestStep(data);
-      res.status(201).json(step);
-    } catch (error) {
-      res.status(400).json({ message: 'Invalid request data' });
-    }
-  });
-  
-  app.patch('/api/tests/:testId/steps/:stepId', async (req, res) => {
-    const testId = parseInt(req.params.testId);
-    const stepId = parseInt(req.params.stepId);
-    
-    if (isNaN(testId) || isNaN(stepId)) {
-      return res.status(400).json({ message: 'Invalid ID' });
-    }
-    
-    const step = await storage.updateTestStep(stepId, req.body);
-    if (!step) {
-      return res.status(404).json({ message: 'Test step not found' });
-    }
-    
-    res.json(step);
-  });
-  
-  app.delete('/api/tests/:testId/steps/:stepId', async (req, res) => {
-    const stepId = parseInt(req.params.stepId);
-    
-    if (isNaN(stepId)) {
-      return res.status(400).json({ message: 'Invalid step ID' });
-    }
-    
-    await storage.deleteTestStep(stepId);
-    res.status(204).send();
-  });
-  
-  app.delete('/api/tests/:testId/steps', async (req, res) => {
-    const testId = parseInt(req.params.testId);
-    
-    if (isNaN(testId)) {
-      return res.status(400).json({ message: 'Invalid test ID' });
-    }
-    
-    await storage.deleteAllTestSteps(testId);
-    res.status(204).send();
-  });
-  
-  app.post('/api/tests/:testId/steps/reorder', async (req, res) => {
-    const testId = parseInt(req.params.testId);
-    
-    if (isNaN(testId)) {
-      return res.status(400).json({ message: 'Invalid test ID' });
-    }
-    
-    if (!req.body.steps || !Array.isArray(req.body.steps)) {
-      return res.status(400).json({ message: 'Steps array is required' });
-    }
-    
-    try {
-      await storage.reorderTestSteps(req.body.steps);
-      const test = await storage.getTest(testId);
       res.json(test);
     } catch (error) {
-      res.status(400).json({ message: 'Invalid request data' });
+      if (error instanceof ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ message: validationError.message });
+      }
+      res.status(500).json({ message: "Failed to update test" });
     }
   });
-  
-  // Test Execution API
-  app.post('/api/tests/:id/run', async (req, res) => {
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ message: 'Invalid ID' });
-    }
-    
-    const test = await storage.getTest(id);
-    if (!test) {
-      return res.status(404).json({ message: 'Test not found' });
-    }
-    
+
+  app.delete("/api/tests/:id", async (req, res) => {
     try {
-      // Run the test with Puppeteer
-      const results = await playbackTest(test);
-      
-      // Update test with last run data
-      await storage.updateTest(id, {
-        lastRun: new Date().toISOString(),
-        lastStatus: results.failed > 0 ? 'failed' : 'passed'
-      });
-      
-      // Save results
-      await storage.createTestResult({
-        runId: 0, // Single test run
-        testId: id,
-        passed: results.passed,
-        failed: results.failed,
-        duration: results.duration,
-        steps: results.steps,
-        error: results.error,
-      });
-      
-      res.json(results);
+      const id = parseInt(req.params.id);
+      await storage.deleteTest(id);
+      res.status(204).send();
     } catch (error) {
-      res.status(500).json({ message: 'Error running test' });
+      res.status(500).json({ message: "Failed to delete test" });
     }
   });
-  
-  // Test Runs API
-  app.post('/api/test-runs', async (req, res) => {
-    const testIds = req.body.testIds;
-    
-    if (!Array.isArray(testIds) || testIds.length === 0) {
-      return res.status(400).json({ message: 'Test IDs array is required' });
-    }
-    
+
+  // API routes for test suites
+  app.get("/api/test-suites", async (req, res) => {
     try {
-      // Create a new test run
-      const run = await storage.createTestRun({
-        status: 'running',
-        totalTests: testIds.length
-      });
+      const testSuites = await storage.getAllTestSuites();
+      res.json(testSuites);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch test suites" });
+    }
+  });
+
+  app.get("/api/test-suites/status", async (req, res) => {
+    try {
+      const testSuiteStatus = await storage.getTestSuitesStatus();
+      res.json(testSuiteStatus);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch test suite status" });
+    }
+  });
+
+  // API routes for test executions
+  app.get("/api/test-executions", async (req, res) => {
+    try {
+      const executions = await storage.getAllTestExecutions();
+      res.json(executions);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch test executions" });
+    }
+  });
+
+  app.get("/api/test-executions/recent", async (req, res) => {
+    try {
+      const recentExecutions = await storage.getRecentTestExecutions();
+      res.json(recentExecutions);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch recent test executions" });
+    }
+  });
+
+  app.post("/api/test-executions/run/:testId", async (req, res) => {
+    try {
+      const testId = parseInt(req.params.testId);
+      const test = await storage.getTest(testId);
       
-      // Start test execution in background
-      setTimeout(async () => {
-        let passedTests = 0;
-        let failedTests = 0;
+      if (!test) {
+        return res.status(404).json({ message: "Test not found" });
+      }
+      
+      // Run the test and create execution record
+      try {
+        await recorder.playTest(test);
+        const executionData = {
+          testId,
+          testName: test.name,
+          browser: test.browser,
+          status: "passed",
+          duration: "2m 15s", // Mock duration for now
+          logs: [],
+          screenshots: []
+        };
         
-        for (const testId of testIds) {
-          try {
-            const test = await storage.getTest(testId);
-            
-            if (test) {
-              // Run the test
-              const results = await playbackTest(test);
-              
-              // Save results
-              await storage.createTestResult({
-                runId: run.id,
-                testId,
-                passed: results.passed,
-                failed: results.failed,
-                duration: results.duration,
-                steps: results.steps,
-                error: results.error,
-              });
-              
-              // Update test last run data
-              await storage.updateTest(testId, {
-                lastRun: new Date().toISOString(),
-                lastStatus: results.failed > 0 ? 'failed' : 'passed'
-              });
-              
-              // Update counters
-              if (results.failed > 0) {
-                failedTests++;
-              } else {
-                passedTests++;
-              }
-            }
-          } catch (error) {
-            failedTests++;
-          }
-          
-          // Update run progress
-          await storage.updateTestRun(run.id, {
-            completedTests: passedTests + failedTests,
-            passedTests,
-            failedTests
-          });
-          
-          // Broadcast progress update
-          const updatedRun = await storage.getTestRun(run.id);
-          broadcast({ type: 'runUpdate', data: updatedRun });
-        }
+        const execution = await storage.createTestExecution(executionData);
         
-        // Complete the run
-        await storage.updateTestRun(run.id, {
-          status: 'completed',
-          endTime: new Date().toISOString(),
-          completedTests: passedTests + failedTests,
-          passedTests,
-          failedTests
+        // Update the test with last execution info
+        await storage.updateTest(testId, {
+          ...test,
+          lastStatus: "passed",
+          lastRun: new Date().toISOString()
         });
         
-        // Broadcast completion
-        const finalRun = await storage.getTestRun(run.id);
-        broadcast({ type: 'runComplete', data: finalRun });
-      }, 0);
-      
-      res.status(201).json(run);
+        res.status(200).json(execution);
+      } catch (error) {
+        // If test execution fails, record it as failed
+        const executionData = {
+          testId,
+          testName: test.name,
+          browser: test.browser,
+          status: "failed",
+          duration: "0m 45s", // Mock duration for now
+          logs: [{ error: error instanceof Error ? error.message : "Unknown error" }],
+          screenshots: []
+        };
+        
+        const execution = await storage.createTestExecution(executionData);
+        
+        // Update the test with last execution info
+        await storage.updateTest(testId, {
+          ...test,
+          lastStatus: "failed",
+          lastRun: new Date().toISOString()
+        });
+        
+        // We still return 200 because the execution was recorded successfully
+        res.status(200).json(execution);
+      }
     } catch (error) {
-      res.status(500).json({ message: 'Error starting test run' });
+      res.status(500).json({ message: "Failed to run test" });
     }
   });
-  
-  app.get('/api/test-runs/:id', async (req, res) => {
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ message: 'Invalid ID' });
-    }
-    
-    const run = await storage.getTestRun(id);
-    if (!run) {
-      return res.status(404).json({ message: 'Test run not found' });
-    }
-    
-    res.json(run);
-  });
-  
-  // Recording API
-  app.post('/api/recording/start', async (req, res) => {
+
+  // API routes for dashboard metrics
+  app.get("/api/metrics", async (req, res) => {
     try {
-      await startBrowser();
-      
-      // Start recording actions
-      recordActions((action) => {
-        // Broadcast recorded action to all clients
-        broadcast({ type: 'action', description: action.description, step: action.step });
+      const metrics = await storage.getDashboardMetrics();
+      res.json(metrics);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch metrics" });
+    }
+  });
+
+  // API routes for reports
+  app.get("/api/reports/summary", async (req, res) => {
+    try {
+      const summary = await storage.getReportSummary();
+      res.json(summary);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch report summary" });
+    }
+  });
+
+  // API routes for recorder
+  app.post("/api/recorder/start", async (req, res) => {
+    try {
+      const schema = z.object({
+        testName: z.string().min(1),
+        targetUrl: z.string().url(),
+        browser: z.string()
       });
       
-      res.json({ success: true, message: 'Recording started' });
+      const data = schema.parse(req.body);
+      await recorder.startRecording(data);
+      res.status(200).json({ message: "Recording started" });
     } catch (error) {
-      res.status(500).json({ message: 'Error starting recording' });
+      if (error instanceof ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ message: validationError.message });
+      }
+      res.status(500).json({ message: "Failed to start recording" });
     }
   });
-  
-  app.post('/api/recording/stop', async (req, res) => {
+
+  app.post("/api/recorder/stop", async (req, res) => {
     try {
-      await stopBrowser();
-      res.json({ success: true, message: 'Recording stopped' });
+      await recorder.stopRecording();
+      res.status(200).json({ message: "Recording stopped" });
     } catch (error) {
-      res.status(500).json({ message: 'Error stopping recording' });
+      res.status(500).json({ message: "Failed to stop recording" });
     }
   });
-  
-  // Dashboard API
-  app.get('/api/dashboard', async (req, res) => {
+
+  app.get("/api/recorder/steps", async (req, res) => {
     try {
-      const totalTests = await storage.getTotalTests();
-      const successRate = await storage.getSuccessRate();
-      const executionsToday = await storage.getExecutionsCountToday();
-      const testsByDay = await storage.getTestRunsByDay();
-      
-      res.json({
-        totalTests,
-        successRate,
-        executionsToday,
-        testsByDay
+      const steps = await recorder.getRecordedSteps();
+      res.status(200).json({ steps });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get recorded steps" });
+    }
+  });
+
+  app.post("/api/recorder/play", async (req, res) => {
+    try {
+      const schema = z.object({
+        testName: z.string().min(1),
+        browser: z.string(),
+        steps: z.array(z.string())
       });
-    } catch (error) {
-      res.status(500).json({ message: 'Error fetching dashboard data' });
-    }
-  });
-  
-  // Recent Tests API
-  app.get('/api/tests/recent', async (req, res) => {
-    const limit = parseInt(req.query.limit as string) || 5;
-    
-    if (isNaN(limit) || limit < 1) {
-      return res.status(400).json({ message: 'Invalid limit' });
-    }
-    
-    const recentTests = await storage.getRecentTests(limit);
-    res.json(recentTests);
-  });
-  
-  // Test Run Results API
-  app.get('/api/test-runs/recent', async (req, res) => {
-    const limit = parseInt(req.query.limit as string) || 10;
-    
-    if (isNaN(limit) || limit < 1) {
-      return res.status(400).json({ message: 'Invalid limit' });
-    }
-    
-    const recentRuns = await storage.getRecentTestRuns(limit);
-    res.json(recentRuns);
-  });
-  
-  // Reports API
-  app.get('/api/reports/summary', async (req, res) => {
-    try {
-      const totalRuns = await storage.getTotalTestRuns();
-      const passed = await storage.getTotalPassedTests();
-      const failed = await storage.getTotalFailedTests();
-      const successRate = passed + failed > 0 ? Math.round((passed / (passed + failed)) * 100) : 0;
-      const avgDuration = await storage.getAverageTestDuration();
-      const trendData = await storage.getSuccessRateTrend();
       
-      res.json({
-        totalRuns,
-        passed,
-        failed,
-        successRate,
-        avgDuration,
-        trendData
-      });
+      const data = schema.parse(req.body);
+      await recorder.playRecording(data);
+      res.status(200).json({ message: "Recording played successfully" });
     } catch (error) {
-      res.status(500).json({ message: 'Error fetching report summary' });
+      if (error instanceof ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ message: validationError.message });
+      }
+      res.status(500).json({ message: "Failed to play recording" });
     }
   });
-  
-  // Settings API
-  app.get('/api/settings/:key', async (req, res) => {
-    const key = req.params.key;
-    const setting = await storage.getSetting(key);
-    
-    if (!setting) {
-      return res.status(404).json({ message: 'Setting not found' });
-    }
-    
-    res.json(setting.value);
-  });
-  
-  app.post('/api/settings/:key', async (req, res) => {
-    const key = req.params.key;
-    
-    try {
-      const setting = await storage.createOrUpdateSetting(key, req.body);
-      res.json(setting);
-    } catch (error) {
-      res.status(400).json({ message: 'Invalid setting value' });
-    }
-  });
+
+  const httpServer = createServer(app);
 
   return httpServer;
 }

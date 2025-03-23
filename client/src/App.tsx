@@ -1,22 +1,27 @@
 import { Switch, Route } from "wouter";
+import { queryClient } from "./lib/queryClient";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
+import { UserProvider } from "@/context/user-context";
 import NotFound from "@/pages/not-found";
-import Dashboard from "@/pages/Dashboard";
-import TestBuilder from "@/pages/TestBuilder";
-import TestExecution from "@/pages/TestExecution";
-import Reports from "@/pages/Reports";
-import Settings from "@/pages/Settings";
-import Header from "@/components/layout/Header";
-import Sidebar from "@/components/layout/Sidebar";
-import { useState } from "react";
+import Dashboard from "@/pages/dashboard";
+import TestRecorder from "@/pages/test-recorder";
+import TestCases from "@/pages/test-cases";
+import TestSuites from "@/pages/test-suites";
+import Reports from "@/pages/reports";
+import ExecutionHistory from "@/pages/execution-history";
+import Settings from "@/pages/settings";
+import MainLayout from "@/components/layout/main-layout";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
-      <Route path="/test-builder" component={TestBuilder} />
-      <Route path="/test-execution" component={TestExecution} />
+      <Route path="/recorder" component={TestRecorder} />
+      <Route path="/test-cases" component={TestCases} />
+      <Route path="/test-suites" component={TestSuites} />
       <Route path="/reports" component={Reports} />
+      <Route path="/history" component={ExecutionHistory} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
@@ -25,16 +30,14 @@ function Router() {
 
 function App() {
   return (
-    <div className="flex flex-col h-screen">
-      <Header />
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
-        <main className="flex-1 overflow-auto bg-gray-100">
+    <QueryClientProvider client={queryClient}>
+      <UserProvider>
+        <MainLayout>
           <Router />
-        </main>
-      </div>
-      <Toaster />
-    </div>
+        </MainLayout>
+        <Toaster />
+      </UserProvider>
+    </QueryClientProvider>
   );
 }
 
