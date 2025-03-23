@@ -228,6 +228,15 @@ export default function ProjectDashboard() {
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
   const [selectedBranch, setSelectedBranch] = useState("main");
   const [selectedTestingMode, setSelectedTestingMode] = useState("record-play");
+  const { authState, logout } = useUser();
+  const [, navigate] = useLocation();
+  
+  useEffect(() => {
+    // If user is not authenticated, redirect to landing page
+    if (!authState.isLoading && !authState.isAuthenticated) {
+      navigate("/");
+    }
+  }, [authState.isAuthenticated, authState.isLoading, navigate]);
 
   const handleCreateProject = (project: any) => {
     setUserProjects([project, ...userProjects]);
@@ -544,9 +553,28 @@ export default function ProjectDashboard() {
               <Settings className="h-4 w-4 mr-2" />
               Settings
             </Button>
-            <Avatar className="h-8 w-8 cursor-pointer">
-              <AvatarFallback>U</AvatarFallback>
-            </Avatar>
+            <div className="flex items-center space-x-2 border-l pl-4 ml-2">
+              <Avatar className="h-8 w-8 cursor-pointer">
+                <AvatarFallback>
+                  {authState.user?.name?.charAt(0) || 'U'}
+                </AvatarFallback>
+              </Avatar>
+              <div className="hidden md:block">
+                <p className="text-sm font-medium">{authState.user?.name || 'User'}</p>
+                <p className="text-xs text-gray-500">{authState.user?.email}</p>
+              </div>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => {
+                  logout();
+                  navigate('/');
+                }}
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="sr-only md:not-sr-only md:ml-2">Logout</span>
+              </Button>
+            </div>
           </div>
         </div>
       </header>

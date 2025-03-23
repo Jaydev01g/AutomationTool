@@ -80,38 +80,28 @@ export default function LandingPage() {
       <nav className="border-b px-4 md:px-6 py-3 bg-white/90 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center space-x-4">
-            <Link href="/">
-              <a className="text-xl font-bold bg-gradient-to-r from-indigo-500 to-purple-600 bg-clip-text text-transparent flex items-center">
-                <div className="w-8 h-8 rounded-md bg-gradient-to-r from-indigo-500 to-purple-600 flex items-center justify-center text-white mr-2">
-                  N
-                </div>
-                NextGen Automation
-              </a>
-            </Link>
+            <div className="text-xl font-bold bg-gradient-to-r from-indigo-500 to-purple-600 bg-clip-text text-transparent flex items-center cursor-pointer" onClick={() => navigate("/")}>
+              <div className="w-8 h-8 rounded-md bg-gradient-to-r from-indigo-500 to-purple-600 flex items-center justify-center text-white mr-2">
+                N
+              </div>
+              NextGen Automation
+            </div>
           </div>
 
           <div className="hidden md:flex items-center space-x-6">
-            <Link href="/features">
-              <a className="text-sm text-gray-700 hover:text-indigo-600 transition-colors">Features</a>
-            </Link>
-            <Link href="/about">
-              <a className="text-sm text-gray-700 hover:text-indigo-600 transition-colors">About</a>
-            </Link>
-            <Link href="/blog">
-              <a className="text-sm text-gray-700 hover:text-indigo-600 transition-colors">Blog</a>
-            </Link>
-            <Link href="/contact">
-              <a className="text-sm text-gray-700 hover:text-indigo-600 transition-colors">Contact Us</a>
-            </Link>
+            <span className="text-sm text-gray-700 hover:text-indigo-600 transition-colors cursor-pointer" onClick={() => navigate("/features")}>Features</span>
+            <span className="text-sm text-gray-700 hover:text-indigo-600 transition-colors cursor-pointer" onClick={() => navigate("/about")}>About</span>
+            <span className="text-sm text-gray-700 hover:text-indigo-600 transition-colors cursor-pointer" onClick={() => navigate("/blog")}>Blog</span>
+            <span className="text-sm text-gray-700 hover:text-indigo-600 transition-colors cursor-pointer" onClick={() => navigate("/contact")}>Contact Us</span>
             <div className="h-4 w-px bg-gray-300"></div>
-            <Link href="/login">
-              <a className="text-sm font-medium text-indigo-600 hover:text-indigo-700">Log in</a>
-            </Link>
-            <Link href="/signup">
-              <Button variant="default" className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700">
-                Sign up
-              </Button>
-            </Link>
+            <span className="text-sm font-medium text-indigo-600 hover:text-indigo-700 cursor-pointer" onClick={() => setActiveTab("login")}>Log in</span>
+            <Button 
+              variant="default" 
+              className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700"
+              onClick={() => setActiveTab("signup")}
+            >
+              Sign up
+            </Button>
           </div>
 
           <div className="md:hidden">
