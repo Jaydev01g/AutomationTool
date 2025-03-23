@@ -5,6 +5,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { UserProvider } from "@/context/user-context";
 import NotFound from "@/pages/not-found";
 import TestRecorder from "@/pages/test-recorder";
+import LandingPage from "@/pages/landing-page";
+import ProjectDashboard from "@/pages/project-dashboard";
 
 // Import with capitalized versions to prevent typescript errors
 import Dashboard from "@/pages/Dashboard";
@@ -20,25 +22,34 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <UserProvider>
         <Switch>
+          {/* Landing page */}
+          <Route path="/" component={LandingPage} />
+          
+          {/* Project Dashboard */}
+          <Route path="/projects" component={ProjectDashboard} />
+          
           {/* Test Recorder is rendered outside of MainLayout */}
           <Route path="/recorder">
             <TestRecorder />
           </Route>
           
-          {/* All other routes use the MainLayout */}
-          <Route>
+          {/* Legacy app routes use the MainLayout */}
+          <Route path="/app">
             <MainLayout>
               <Switch>
-                <Route path="/" component={Dashboard} />
-                <Route path="/test-cases" component={TestCases} />
-                <Route path="/test-suites" component={TestSuites} />
-                <Route path="/reports" component={Reports} />
-                <Route path="/history" component={ExecutionHistory} />
-                <Route path="/settings" component={Settings} />
+                <Route path="/app" component={Dashboard} />
+                <Route path="/app/test-cases" component={TestCases} />
+                <Route path="/app/test-suites" component={TestSuites} />
+                <Route path="/app/reports" component={Reports} />
+                <Route path="/app/history" component={ExecutionHistory} />
+                <Route path="/app/settings" component={Settings} />
                 <Route component={NotFound} />
               </Switch>
             </MainLayout>
           </Route>
+          
+          {/* Catch all for not found routes */}
+          <Route component={NotFound} />
         </Switch>
         <Toaster />
       </UserProvider>
