@@ -19,48 +19,66 @@ export function useWebSocket(options?: WebSocketOptions): WebSocketHook {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Initialize WebSocket connection
   useEffect(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
-    const ws = new WebSocket(wsUrl);
-
-    ws.onopen = (event) => {
-      console.log('WebSocket connected');
-      setConnected(true);
-      setError(null);
-      if (options?.onOpen) options.onOpen(event);
-    };
-
-    ws.onclose = (event) => {
-      console.log('WebSocket disconnected');
-      setConnected(false);
-      if (options?.onClose) options.onClose(event);
-    };
-
-    ws.onerror = (event) => {
-      console.error('WebSocket error:', event);
-      setError('WebSocket connection error');
-      if (options?.onError) options.onError(event);
-    };
-
-    ws.onmessage = (event) => {
-      if (options?.onMessage) options.onMessage(event);
-    };
-
-    setSocket(ws);
-
+    let ws: WebSocket | null = null;
+    
+    try {
+      // Create WebSocket URL
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      console.log('Connecting to WebSocket:', wsUrl);
+      
+      // Create WebSocket instance
+      ws = new WebSocket(wsUrl);
+      
+      // Set up event handlers
+      ws.onopen = (event) => {
+        console.log('WebSocket connected');
+        setConnected(true);
+        setError(null);
+        if (options?.onOpen) options.onOpen(event);
+      };
+      
+      ws.onclose = (event) => {
+        console.log('WebSocket disconnected from server');
+        setConnected(false);
+        if (options?.onClose) options.onClose(event);
+      };
+      
+      ws.onerror = (event) => {
+        console.error('WebSocket error:', event);
+        setError('WebSocket connection error');
+        if (options?.onError) options.onError(event);
+      };
+      
+      ws.onmessage = (event) => {
+        if (options?.onMessage) options.onMessage(event);
+      };
+      
+      setSocket(ws);
+    } catch (err) {
+      console.error('Error creating WebSocket:', err);
+      setError(`Failed to create WebSocket: ${err}`);
+    }
+    
+    // Cleanup function
     return () => {
-      ws.close();
+      if (ws) {
+        console.log('Closing WebSocket connection');
+        ws.close();
+      }
     };
-  }, [options]);
-
+  }, [options?.onMessage, options?.onOpen, options?.onClose, options?.onError]);
+  
+  // Send message function
   const sendMessage = useCallback((message: any) => {
-    if (socket && connected) {
+    if (socket && socket.readyState === WebSocket.OPEN) {
       socket.send(typeof message === 'string' ? message : JSON.stringify(message));
     } else {
-      console.warn('WebSocket not connected, cannot send message');
+      console.warn('WebSocket not open, cannot send message');
     }
-  }, [socket, connected]);
-
+  }, [socket]);
+  
   return { socket, connected, error, sendMessage };
 }

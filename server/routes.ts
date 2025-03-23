@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { WebSocketServer } from 'ws';
+import { WebSocketServer, WebSocket } from 'ws';
 import { storage } from "./storage";
 import { recorder } from "./recorder";
 import { insertTestSchema, insertTestExecutionSchema } from "@shared/schema";
@@ -277,7 +277,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             // Broadcast to all clients
             wss.clients.forEach((client) => {
-              if (client.readyState === ws.OPEN) {
+              if (client.readyState === WebSocket.OPEN) {
                 client.send(JSON.stringify({
                   type: 'ACTION_RECORDED',
                   action: data.action
