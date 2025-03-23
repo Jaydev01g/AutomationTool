@@ -8,7 +8,8 @@ import {
   RefreshCw, 
   Save, 
   Upload, 
-  Download
+  Download, 
+  AlertCircle
 } from "lucide-react";
 import {
   Select,
@@ -18,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useWebSocket } from "@/hooks/use-websocket";
 
 // Simple toast component
 function Toast({ message, onClose }: { message: string; onClose: () => void }) {
@@ -47,6 +49,41 @@ export default function TestRecorder() {
   const [urlInput, setUrlInput] = useState("");
   const [toast, setToast] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  
+  // Setup WebSocket connection
+  const { connected, sendMessage } = useWebSocket({
+    onMessage: (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log("WebSocket message:", data);
+        
+        // Handle different message types from server
+        if (data.type === 'ACTION_RECORDED' && data.action) {
+          if (!recordedSteps.includes(data.action)) {
+            setRecordedSteps(prev => [...prev, data.action]);
+            showToast(`Recorded: ${data.action}`);
+          }
+        } else if (data.type === 'INIT') {
+          // Initialize state from server
+          setIsRecording(data.isRecording);
+          if (data.steps && data.steps.length > 0) {
+            setRecordedSteps(data.steps);
+          }
+        }
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
+      }
+    },
+    onOpen: () => {
+      console.log('WebSocket connected to server');
+    },
+    onClose: () => {
+      console.log('WebSocket disconnected from server');
+    },
+    onError: () => {
+      showToast('WebSocket connection error. Some features may not work correctly.');
+    }
+  });
   
   const showToast = (message: string) => {
     setToast(message);

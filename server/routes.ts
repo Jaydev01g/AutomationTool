@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { WebSocketServer } from 'ws';
 import { storage } from "./storage";
 import { recorder } from "./recorder";
 import { insertTestSchema, insertTestExecutionSchema } from "@shared/schema";
@@ -256,6 +257,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
+  
+  // Set up WebSocket server for real-time communication with browser
+  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  
+  wss.on('connection', (ws) => {
+    console.log('WebSocket client connected');
+    
+    ws.on('message', (message) => {
+      try {
+        const data = JSON.parse(message.toString());
+        console.log('Received message:', data);
+        
+        // Handle different message types
+        if (data.type === 'RECORD_ACTION') {
+          // Record browser action
+          if (data.action) {
+            recorder.recordedSteps.push(data.action);
+            
+            // Broadcast to all clients
+            wss.clients.forEach((client) => {
+              if (client.readyState === ws.OPEN) {
+                client.send(JSON.stringify({
+                  type: 'ACTION_RECORDED',
+                  action: data.action
+                }));
+              }
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error handling WebSocket message:', error);
+      }
+    });
+    
+    ws.on('close', () => {
+      console.log('WebSocket client disconnected');
+    });
+    
+    // Send initial state
+    ws.send(JSON.stringify({
+      type: 'INIT',
+      isRecording: recorder.isRecording,
+      steps: recorder.recordedSteps
+    }));
+  });
 
   return httpServer;
 }

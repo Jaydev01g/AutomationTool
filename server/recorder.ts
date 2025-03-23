@@ -18,8 +18,9 @@ interface PlayConfig {
 class Recorder {
   private browser: Browser | null = null;
   private page: Page | null = null;
-  private isRecording: boolean = false;
-  private recordedSteps: string[] = [];
+  // Changed to public for WebSocket access
+  public isRecording: boolean = false;
+  public recordedSteps: string[] = [];
   private config: RecordingConfig | null = null;
 
   // Start recording a new test
