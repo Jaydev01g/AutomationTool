@@ -1,9 +1,4 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Search, Calendar, Filter, RefreshCw, Eye } from "lucide-react";
-import { TestExecution } from "@shared/schema";
 import {
   Card,
   CardContent,
@@ -11,6 +6,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { StatusBadge, StatusType } from "@/components/ui/status-badge";
 import {
   Table,
   TableBody,
@@ -19,8 +17,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Skeleton } from "@/components/ui/skeleton";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { TestExecution } from "@shared/schema";
+import { useQuery } from "@tanstack/react-query";
+import { Calendar, Eye, Filter, RefreshCw, Search } from "lucide-react";
+import { useState } from "react";
 
 export default function ExecutionHistory() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -104,10 +104,10 @@ export default function ExecutionHistory() {
                     <TableCell className="font-medium">{execution.testName}</TableCell>
                     <TableCell>{execution.browser}</TableCell>
                     <TableCell>
-                      <StatusBadge status={execution.status} />
+                      <StatusBadge status={execution.status as StatusType} />
                     </TableCell>
                     <TableCell>{execution.duration}</TableCell>
-                    <TableCell>{execution.executedAt || execution.lastRun}</TableCell>
+                    <TableCell>{(execution.executedAt || execution.lastRun)?.toLocaleString()}</TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="icon" title="View Details">
                         <Eye className="h-4 w-4" />

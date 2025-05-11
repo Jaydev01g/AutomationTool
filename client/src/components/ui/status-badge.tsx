@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-type StatusType = "passed" | "failed" | "warning" | "pending";
+export type StatusType = "passed" | "failed" | "warning" | "pending";
 
 interface StatusBadgeProps {
   status: StatusType;

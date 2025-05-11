@@ -1,9 +1,18 @@
-import { useQuery } from "@tanstack/react-query";
 import { MetricsCard } from "@/components/dashboard/metrics-card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useQuery } from "@tanstack/react-query";
 
 export function MetricsGrid() {
-  const { data: metrics, isLoading } = useQuery({
+  const { data: metrics, isLoading } = useQuery<{
+    testCases: number;
+    testCasesTrend?: number;
+    successRate: number;
+    successRateTrend?: number;
+    failedTests: number;
+    failedTestsTrend?: number;
+    avgExecutionTime: number;
+    executionTimeTrend?: number;
+  }>({
     queryKey: ["/api/metrics"],
   });
   

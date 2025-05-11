@@ -1,19 +1,19 @@
-import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { 
+import { Input } from "@/components/ui/input";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Home,
   Maximize2,
   Minimize2,
   RotateCcw,
-  ArrowLeft,
-  ArrowRight,
-  Home
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { useEffect, useRef, useState } from "react";
 
 interface EmbeddedBrowserProps {
   targetUrl: string;
   isRecording: boolean;
-  onAction: (action: {type: string; selector: string; value?: string; text?: string}) => void;
+  onAction: (action: { type: string; selector: string; value?: string; text?: string }) => void;
 }
 
 export function EmbeddedBrowser({ targetUrl, isRecording, onAction }: EmbeddedBrowserProps) {
@@ -36,15 +36,14 @@ export function EmbeddedBrowser({ targetUrl, isRecording, onAction }: EmbeddedBr
   // Handle loading a new URL
   const handleUrlSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (urlInput) {
-      // If missing protocol, add https://
       let url = urlInput;
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        url = 'https://' + url;
+      if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        url = "https://" + url;
         setUrlInput(url);
       }
-      
+
       navigateToUrl(url);
     }
   };
@@ -52,8 +51,7 @@ export function EmbeddedBrowser({ targetUrl, isRecording, onAction }: EmbeddedBr
   // Navigate to a URL and update history
   const navigateToUrl = (url: string) => {
     setCurrentUrl(url);
-    
-    // Trim history if we've navigated back and then to a new page
+
     if (historyPosition < history.length - 1) {
       const newHistory = history.slice(0, historyPosition + 1);
       setHistory([...newHistory, url]);
@@ -62,13 +60,12 @@ export function EmbeddedBrowser({ targetUrl, isRecording, onAction }: EmbeddedBr
       setHistory([...history, url]);
       setHistoryPosition(history.length);
     }
-    
-    // Record navigation action
+
     if (isRecording) {
       onAction({
-        type: 'navigate',
-        selector: '',
-        value: url
+        type: "navigate",
+        selector: "",
+        value: url,
       });
     }
   };
@@ -108,22 +105,22 @@ export function EmbeddedBrowser({ targetUrl, isRecording, onAction }: EmbeddedBr
   // Setup event listener for messages from the iframe
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      if (event.data && event.data.type && event.data.type.startsWith('RECORDER_')) {
-        console.log('Received recorder action:', event.data);
-        
+      if (event.data && event.data.type && event.data.type.startsWith("RECORDER_")) {
+        console.log("Received recorder action:", event.data);
+
         if (isRecording) {
           onAction({
-            type: event.data.type.replace('RECORDER_', '').toLowerCase(),
+            type: event.data.type.replace("RECORDER_", "").toLowerCase(),
             selector: event.data.selector,
             value: event.data.value,
-            text: event.data.text
+            text: event.data.text,
           });
         }
       }
     };
-    
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
   }, [isRecording, onAction]);
 
   // Inject our recording script into the iframe
@@ -133,142 +130,110 @@ export function EmbeddedBrowser({ targetUrl, isRecording, onAction }: EmbeddedBr
         try {
           if (iframeRef.current && iframeRef.current.contentWindow) {
             const doc = iframeRef.current.contentWindow.document;
-            
-            // Check if our script already exists
-            if (!doc.getElementById('recorder-script')) {
-              const script = doc.createElement('script');
-              script.id = 'recorder-script';
+
+            if (!doc.getElementById("recorder-script")) {
+              const script = doc.createElement("script");
+              script.id = "recorder-script";
               script.textContent = `
                 (function() {
                   console.log('Recording script injected');
-                  
+
+                  const generateSelector = (element) => {
+                    if (element.id) return '#' + element.id;
+                    if (element.className && typeof element.className === 'string') {
+                      return '.' + element.className.replace(/\\s+/g, '.');
+                    }
+                    if (element.tagName) {
+                      let selector = element.tagName.toLowerCase();
+                      if (element.hasAttribute('name')) {
+                        selector += '[name="' + element.getAttribute('name') + '"]';
+                      }
+                      return selector;
+                    }
+                    return 'unknown';
+                  };
+
                   // Handle clicks
                   document.addEventListener('click', function(event) {
                     const target = event.target;
-                    let selector = '';
-                    
-                    // Get the best selector for this element
-                    if (target.id) {
-                      selector = '#' + target.id;
-                    } else if (target.className && typeof target.className === 'string') {
-                      selector = '.' + target.className.replace(/\\s+/g, '.');
-                    } else {
-                      selector = target.tagName.toLowerCase();
-                      if (target.hasAttribute('name')) {
-                        selector += '[name="' + target.getAttribute('name') + '"]';
-                      }
-                    }
-                    
+                    const selector = generateSelector(target);
+
                     window.parent.postMessage({
                       type: 'RECORDER_CLICK',
                       selector: selector,
                       text: target.textContent ? target.textContent.trim() : '',
-                      innerText: target.innerText ? target.innerText.trim() : ''
                     }, '*');
                   }, true);
-                  
+
                   // Handle input changes
                   document.addEventListener('change', function(event) {
                     const target = event.target;
-                    if (target.tagName.toLowerCase() === 'input' || 
-                        target.tagName.toLowerCase() === 'textarea' ||
-                        target.tagName.toLowerCase() === 'select') {
-                      
-                      let selector = '';
-                      if (target.id) {
-                        selector = '#' + target.id;
-                      } else if (target.name) {
-                        selector = target.tagName.toLowerCase() + '[name="' + target.name + '"]';
-                      } else if (target.className && typeof target.className === 'string') {
-                        selector = '.' + target.className.replace(/\\s+/g, '.');
-                      } else {
-                        selector = target.tagName.toLowerCase();
-                      }
-                      
-                      window.parent.postMessage({
-                        type: 'RECORDER_INPUT',
-                        selector: selector,
-                        value: target.value
-                      }, '*');
-                    }
+                    const selector = generateSelector(target);
+
+                    window.parent.postMessage({
+                      type: 'RECORDER_INPUT',
+                      selector: selector,
+                      value: target.value,
+                    }, '*');
                   }, true);
-                  
+
                   // Handle form submissions
                   document.addEventListener('submit', function(event) {
                     const form = event.target;
-                    let selector = '';
-                    
-                    if (form.id) {
-                      selector = '#' + form.id;
-                    } else if (form.className && typeof form.className === 'string') {
-                      selector = '.' + form.className.replace(/\\s+/g, '.');
-                    } else {
-                      selector = 'form';
-                    }
-                    
+                    const selector = generateSelector(form);
+
                     window.parent.postMessage({
                       type: 'RECORDER_SUBMIT',
-                      selector: selector
+                      selector: selector,
                     }, '*');
                   }, true);
                 })();
               `;
-              
+
               doc.head.appendChild(script);
-              console.log('Injected recording script into iframe');
+              console.log("Injected recording script into iframe");
             }
           }
         } catch (err) {
-          console.error('Error injecting script:', err);
+          console.error("Error injecting script:", err);
         }
-      }, 1500); // Wait for iframe to load
+      }, 1500);
     };
-    
+
     if (isRecording) {
       injectRecordingScript();
     }
   }, [isRecording, currentUrl]);
 
   return (
-    <div 
+    <div
       ref={browserRef}
       className={`browser-container flex flex-col border rounded-lg overflow-hidden ${
-        isFullscreen ? 'fixed inset-0 z-50 bg-white' : 'h-[600px]'
+        isFullscreen ? "fixed inset-0 z-50 bg-white" : "h-[600px]"
       }`}
     >
       <div className="browser-header bg-slate-100 px-3 py-2 border-b flex flex-col">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center space-x-2">
             <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
+              className="variant-ghost"
               onClick={handleBack}
               disabled={historyPosition <= 0}
             >
               <ArrowLeft className="h-4 w-4 text-slate-500" />
             </Button>
             <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
+              className="variant-ghost"
               onClick={handleForward}
               disabled={historyPosition >= history.length - 1}
             >
               <ArrowRight className="h-4 w-4 text-slate-500" />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={handleReload}
-            >
+            <Button className="variant-ghost h-8 w-8 icon" onClick={handleReload}>
               <RotateCcw className="h-4 w-4 text-slate-500" />
             </Button>
             <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
+              className="variant-ghost h-8 w-8"
               onClick={() => {
                 setCurrentUrl(targetUrl);
                 setUrlInput(targetUrl);
@@ -277,12 +242,7 @@ export function EmbeddedBrowser({ targetUrl, isRecording, onAction }: EmbeddedBr
               <Home className="h-4 w-4 text-slate-500" />
             </Button>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={toggleFullscreen}
-          >
+          <Button className="h-8 w-8" onClick={toggleFullscreen}>
             {isFullscreen ? (
               <Minimize2 className="h-4 w-4 text-slate-500" />
             ) : (
@@ -305,13 +265,12 @@ export function EmbeddedBrowser({ targetUrl, isRecording, onAction }: EmbeddedBr
           </div>
         )}
       </div>
-      
+
       <div className="browser-content flex-1 bg-white relative">
-        {/* Transparent overlay to capture clicks when not recording */}
         {!isRecording && (
           <div className="absolute inset-0 z-10 bg-transparent pointer-events-none" />
         )}
-        
+
         <iframe
           ref={iframeRef}
           src={currentUrl}

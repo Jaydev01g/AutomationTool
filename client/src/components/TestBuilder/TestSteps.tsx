@@ -1,22 +1,21 @@
-import { useState } from "react";
-import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
-import { 
-  EditIcon, 
-  TrashIcon, 
-  PlusIcon, 
-  KeyboardIcon, 
-  TouchIcon, 
-  CheckCircleIcon, 
-  TimerIcon,
-  ChevronUpDownIcon,
-  MousePointerIcon
-} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { TestStep } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
+import { TestStep } from "@/lib/types";
+import {
+  CheckCircleIcon,
+  ChevronsUpDownIcon,
+  KeyboardIcon,
+  MousePointerIcon,
+  PlusIcon,
+  TimerIcon,
+  TouchpadIcon,
+  TrashIcon
+} from "lucide-react";
+import { useState } from "react";
+import { DragDropContext, Draggable, Droppable } from "react-beautiful-dnd";
 
 interface TestStepsProps {
   testId: number;
@@ -119,11 +118,11 @@ export default function TestSteps({ testId, testSteps }: TestStepsProps) {
   const getStepIcon = (type: string) => {
     switch (type) {
       case 'navigate': return <MousePointerIcon className="h-4 w-4 text-gray-500" />;
-      case 'click': return <TouchIcon className="h-4 w-4 text-gray-500" />;
+      case 'click': return <TouchpadIcon className="h-4 w-4 text-gray-500" />;
       case 'type': return <KeyboardIcon className="h-4 w-4 text-gray-500" />;
       case 'verify': return <CheckCircleIcon className="h-4 w-4 text-gray-500" />;
       case 'wait': return <TimerIcon className="h-4 w-4 text-gray-500" />;
-      case 'scroll': return <ChevronUpDownIcon className="h-4 w-4 text-gray-500" />;
+      case 'scroll': return <ChevronsUpDownIcon className="h-4 w-4 text-gray-500" />;
       default: return <MousePointerIcon className="h-4 w-4 text-gray-500" />;
     }
   };
@@ -133,18 +132,14 @@ export default function TestSteps({ testId, testSteps }: TestStepsProps) {
       <div className="border-b border-gray-200 p-4 bg-gray-50 flex justify-between items-center">
         <h3 className="font-medium text-gray-800">Test Steps</h3>
         <div className="flex space-x-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
             className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1"
             onClick={handleAddStep}
           >
             <PlusIcon className="h-4 w-4 mr-1" />
             <span>Add Step</span>
           </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
             className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1"
             onClick={handleClearSteps}
           >
@@ -247,7 +242,7 @@ export default function TestSteps({ testId, testSteps }: TestStepsProps) {
                               <div className="text-sm text-gray-600">Condition:</div>
                               <Select 
                                 value={step.condition || 'exists'} 
-                                onValueChange={(value) => handleUpdateStep(step.id, { condition: value })}
+                                onValueChange={(value: string) => handleUpdateStep(step.id, { condition: value })}
                               >
                                 <SelectTrigger className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm mt-1">
                                   <SelectValue placeholder="Select condition" />
@@ -280,7 +275,7 @@ export default function TestSteps({ testId, testSteps }: TestStepsProps) {
                             <div className="text-sm text-gray-600">Direction:</div>
                             <Select 
                               value={step.direction || 'down'} 
-                              onValueChange={(value) => handleUpdateStep(step.id, { direction: value })}
+                              onValueChange={(value: string) => handleUpdateStep(step.id, { direction: value })}
                             >
                               <SelectTrigger className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm mt-1">
                                 <SelectValue placeholder="Select direction" />

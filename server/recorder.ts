@@ -1,6 +1,6 @@
 // Puppeteer-based browser automation for recording and playing test actions
-import puppeteer, { Browser, Page } from 'puppeteer';
 import { Test } from '@shared/schema';
+import puppeteer, { Browser, Page } from 'puppeteer';
 
 // Define interfaces for recorder functionality
 interface RecordingConfig {
@@ -259,7 +259,7 @@ class Recorder {
 
     // Listen for navigation events
     this.page.on('framenavigated', async (frame) => {
-      if (frame === this.page.mainFrame()) {
+      if (this.page && frame === this.page.mainFrame()) {
         const url = frame.url();
         if (url !== 'about:blank' && this.recordedSteps.length > 0) {
           // Don't record the initial navigation, it's already handled
@@ -313,7 +313,11 @@ class Recorder {
         await this.page.waitForSelector(selector, { visible: true, timeout: 10000 });
         
         // Clear the input first
-        await this.page.$eval(selector, (el: HTMLInputElement) => el.value = '');
+        await this.page.$eval(selector, (el) => {
+          if (el instanceof HTMLInputElement) {
+            el.value = '';
+          }
+        });
         
         // Type the text
         await this.page.type(selector, text);

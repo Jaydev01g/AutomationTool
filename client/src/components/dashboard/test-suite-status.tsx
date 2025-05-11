@@ -1,8 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Folder, FilterIcon } from "lucide-react";
-import { TestSuiteStatus } from "@shared/schema";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TestSuiteStatus } from "@shared/schema";
+import { useQuery } from "@tanstack/react-query";
+import { FilterIcon, Folder } from "lucide-react";
 
 export function TestSuiteStatusComponent() {
   const { data: testSuites, isLoading } = useQuery<TestSuiteStatus[]>({
@@ -15,10 +15,10 @@ export function TestSuiteStatusComponent() {
         <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center">
           <h2 className="font-semibold text-lg text-slate-800">Test Suite Status</h2>
           <div className="flex items-center space-x-2">
-            <Button variant="outline" size="icon" className="h-8 w-8">
+            <Button className="h-8 w-8">
               <FilterIcon className="h-4 w-4" />
             </Button>
-            <Button variant="link" size="sm">View All</Button>
+            <Button className="text-sm">View All</Button>
           </div>
         </div>
         <div className="p-6">
@@ -41,10 +41,10 @@ export function TestSuiteStatusComponent() {
       <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center">
         <h2 className="font-semibold text-lg text-slate-800">Test Suite Status</h2>
         <div className="flex items-center space-x-2">
-          <Button variant="outline" size="icon" className="h-8 w-8">
+          <Button className="h-8 w-8">
             <FilterIcon className="h-4 w-4 text-slate-500" />
           </Button>
-          <Button variant="link" size="sm">View All</Button>
+          <Button className="text-sm">View All</Button>
         </div>
       </div>
       <div className="p-6">

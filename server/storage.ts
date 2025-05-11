@@ -1,16 +1,27 @@
-import { 
-  InsertTest, InsertTestExecution, InsertTestSuite, 
-  Test, TestExecution, TestSuite, TestSuiteStatus, 
-  DashboardMetrics, ReportSummary 
+import {
+  DashboardMetrics,
+  InsertTestExecution, InsertTestSuite,
+  ReportSummary,
+  Test, TestExecution, TestSuite, TestSuiteStatus
 } from "@shared/schema";
-
+import type { Json } from "node_modules/drizzle-zod/utils.d.mts";
+export interface LocalInsertTest {
+  name: string;
+  targetUrl: string;
+  browser: string;
+  steps: Json;
+  description?: string | null;
+  userId?: number | null;
+  lastStatus?: string | null; // Added lastStatus property
+  lastRun?: string | null; // Added lastRun property
+}
 // Interface for storage operations
 export interface IStorage {
   // Test operations
   getAllTests(): Promise<Test[]>;
   getTest(id: number): Promise<Test | undefined>;
-  createTest(test: InsertTest): Promise<Test>;
-  updateTest(id: number, test: Partial<InsertTest>): Promise<Test | undefined>;
+  createTest(test: LocalInsertTest): Promise<Test>;
+  updateTest(id: number, test: Partial<LocalInsertTest>): Promise<Test | undefined>;
   deleteTest(id: number): Promise<void>;
   
   // Test suite operations
@@ -62,7 +73,7 @@ export class MemStorage implements IStorage {
     return this.tests.get(id);
   }
   
-  async createTest(test: InsertTest): Promise<Test> {
+  async createTest(test: LocalInsertTest): Promise<Test> {
     const id = this.currentTestId++;
     const now = new Date().toISOString();
     
@@ -76,15 +87,15 @@ export class MemStorage implements IStorage {
       lastStatus: null,
       lastRun: null,
       userId: test.userId || 1,
-      createdAt: now,
-      updatedAt: now
+      createdAt: new Date(now),
+      updatedAt: new Date(now)
     };
     
     this.tests.set(id, newTest);
     return newTest;
   }
   
-  async updateTest(id: number, testUpdate: Partial<InsertTest>): Promise<Test | undefined> {
+  async updateTest(id: number, testUpdate: Partial<LocalInsertTest>): Promise<Test | undefined> {
     const existingTest = this.tests.get(id);
     
     if (!existingTest) {
@@ -94,7 +105,7 @@ export class MemStorage implements IStorage {
     const updatedTest: Test = {
       ...existingTest,
       ...testUpdate,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date()
     };
     
     this.tests.set(id, updatedTest);
@@ -125,11 +136,11 @@ export class MemStorage implements IStorage {
       description: testSuite.description || "",
       testIds: testSuite.testIds || [],
       userId: testSuite.userId || 1,
-      createdAt: now,
-      updatedAt: now,
+      createdAt: new Date(now),
+      updatedAt: new Date(now),
       testCount: (testSuite.testIds as number[]).length,
       successRate: 0,
-      lastRun: null
+      lastRun: ""
     };
     
     this.testSuites.set(id, newTestSuite);
@@ -147,7 +158,7 @@ export class MemStorage implements IStorage {
       ...existingTestSuite,
       ...testSuiteUpdate,
       testCount: testSuiteUpdate.testIds ? (testSuiteUpdate.testIds as number[]).length : existingTestSuite.testCount,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date()
     };
     
     this.testSuites.set(id, updatedTestSuite);
@@ -195,7 +206,7 @@ export class MemStorage implements IStorage {
       logs: execution.logs || [],
       screenshots: execution.screenshots || [],
       userId: execution.userId || 1,
-      executedAt: now
+      executedAt: new Date(now)
     };
     
     this.testExecutions.set(id, newExecution);
@@ -251,7 +262,7 @@ export class MemStorage implements IStorage {
   
   private updateTestSuiteStatus(testId: number, isPassed: boolean): void {
     // Find all test suites containing this test
-    for (const suite of this.testSuites.values()) {
+    for (const suite of Array.from(this.testSuites.values())) {
       if ((suite.testIds as number[]).includes(testId)) {
         // Update last run date
         suite.lastRun = new Date().toISOString();
@@ -373,15 +384,14 @@ export class MemStorage implements IStorage {
       
       // Update tests with last execution info
       this.updateTest(tests[0].id, {
-        lastStatus: "passed",
-        lastRun: new Date().toISOString()
+        // Update other properties as needed
       });
-      
+
       this.updateTest(tests[1].id, {
         lastStatus: "failed",
         lastRun: new Date().toISOString()
       });
-      
+
       this.updateTest(tests[2].id, {
         lastStatus: "passed",
         lastRun: new Date().toISOString()

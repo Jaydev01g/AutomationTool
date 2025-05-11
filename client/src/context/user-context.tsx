@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 
 interface User {
   id: number;
@@ -15,6 +15,10 @@ interface AuthState {
 }
 
 interface UserContextType {
+  user: {
+    avatarUrl: string | undefined; name: string; role: string; 
+};
+  displayName: string;
   authState: AuthState;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
@@ -145,6 +149,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
   return (
     <UserContext.Provider 
       value={{ 
+        user: authState.user 
+          ? { name: authState.user.name, role: authState.user.role, avatarUrl: authState.user.avatarUrl } 
+          : { name: "Guest", role: "Guest", avatarUrl: undefined },
+        displayName: authState.user?.name || "Guest",
         authState, 
         login, 
         logout, 

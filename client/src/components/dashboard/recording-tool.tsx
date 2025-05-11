@@ -1,14 +1,7 @@
-import { useState } from "react";
+import { RecordedSteps } from "@/components/recorder/recorded-steps";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RecordedSteps } from "@/components/recorder/recorded-steps";
-import { 
-  Settings, 
-  HelpCircle, 
-  Save, 
-  Trash2
-} from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -17,8 +10,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
-import { queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import {
+  HelpCircle,
+  Save,
+  Settings,
+  Trash2
+} from "lucide-react";
+import { useState } from "react";
 
 export function RecordingTool() {
   const { toast } = useToast();
@@ -234,10 +233,10 @@ export function RecordingTool() {
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-medium text-slate-700">Recording Controls</h3>
             <div className="flex items-center space-x-1">
-              <Button variant="ghost" size="icon" className="h-8 w-8" title="Settings">
+              <Button className="h-8 w-8" title="Settings">
                 <Settings className="h-4 w-4 text-slate-500" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8" title="Help">
+              <Button className="h-8 w-8" title="Help">
                 <HelpCircle className="h-4 w-4 text-slate-500" />
               </Button>
             </div>
@@ -275,9 +274,7 @@ export function RecordingTool() {
           <div className="bg-slate-100 px-3 py-2 border-b flex items-center justify-between">
             <h3 className="text-sm font-medium text-slate-700">Recorded Steps</h3>
             <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
+              className="h-8 w-8 bg-transparent hover:bg-slate-200"
               onClick={handleClearSteps}
               disabled={recordedSteps.length === 0 || isRecording || isPlaying}
             >
@@ -288,7 +285,7 @@ export function RecordingTool() {
         </div>
         
         <div className="mt-6 flex justify-between">
-          <Button variant="outline" className="text-slate-500 hover:text-slate-700" disabled={isRecording || isPlaying}>
+          <Button className="text-slate-500 hover:text-slate-700 border border-slate-300" disabled={isRecording || isPlaying}>
             <Save className="h-4 w-4 mr-1" />
             Save as Template
           </Button>

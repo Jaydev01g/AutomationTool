@@ -1,20 +1,27 @@
-import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Search, Download, BarChart, LineChart, Calendar, Filter } from "lucide-react";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
-  CardTitle,
+  CardTitle
 } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useQuery } from "@tanstack/react-query";
+import { BarChart, Calendar, Download, Filter, LineChart, Search } from "lucide-react";
+
+interface ReportSummary {
+  totalTests: number;
+  passed: number;
+  failed: number;
+  passRate: number;
+  failRate: number;
+  avgDuration: string;
+}
 
 export default function Reports() {
-  const { data: reportSummary, isLoading } = useQuery({
+  const { data: reportSummary, isLoading } = useQuery<ReportSummary>({
     queryKey: ["/api/reports/summary"],
   });
   

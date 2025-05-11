@@ -1,7 +1,7 @@
-import { Link, useLocation } from "wouter";
-import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { useUser } from "@/context/user-context";
+import { cn } from "@/lib/utils";
+import { Link, useLocation } from "wouter";
 
 interface SidebarItemProps {
   icon: string;
@@ -30,7 +30,8 @@ const SidebarItem = ({ icon, label, href, isActive }: SidebarItemProps) => {
 
 export function Sidebar() {
   const [location] = useLocation();
-  const { user } = useUser();
+  const userContext = useUser();
+  const user = userContext?.user || { name: "Guest", role: "Viewer" }; // Provide fallback if necessary
   
   const navItems = [
     { icon: "dashboard", label: "Dashboard", href: "/" },

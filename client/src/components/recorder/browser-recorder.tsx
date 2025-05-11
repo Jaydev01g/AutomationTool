@@ -1,19 +1,9 @@
-import { useState } from "react";
+import { EmbeddedBrowser } from "@/components/recorder/embedded-browser";
+import { RecordedSteps } from "@/components/recorder/recorded-steps";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RecordedSteps } from "@/components/recorder/recorded-steps";
-import { EmbeddedBrowser } from "@/components/recorder/embedded-browser";
-import { 
-  Play, 
-  Square, 
-  RefreshCw, 
-  Save, 
-  Upload, 
-  Download, 
-  Settings,
-  Trash2
-} from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -21,11 +11,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
-import { queryClient } from "@/lib/queryClient";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import {
+  Download,
+  Play,
+  RefreshCw,
+  Save,
+  Settings,
+  Square,
+  Trash2,
+  Upload,
+} from "lucide-react";
+import { useState } from "react";
 
 export function BrowserRecorder() {
   const { toast } = useToast();
@@ -37,7 +36,7 @@ export function BrowserRecorder() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeTab, setActiveTab] = useState("recorder");
   const [showBrowser, setShowBrowser] = useState(false);
-  
+
   const handleStartRecording = async () => {
     if (!testName) {
       toast({
@@ -47,7 +46,7 @@ export function BrowserRecorder() {
       });
       return;
     }
-    
+
     if (!targetUrl) {
       toast({
         title: "Target URL required",
@@ -56,18 +55,18 @@ export function BrowserRecorder() {
       });
       return;
     }
-    
+
     try {
       setIsRecording(true);
       setShowBrowser(true);
       setRecordedSteps([`Navigate to ${targetUrl}`]);
-      
+
       await apiRequest("POST", "/api/recorder/start", {
         testName,
         targetUrl,
         browser,
       });
-      
+
       toast({
         title: "Recording started",
         description: "Interact with the embedded browser to record actions",
@@ -81,7 +80,7 @@ export function BrowserRecorder() {
       setIsRecording(false);
     }
   };
-  
+
   const handleStopRecording = async () => {
     try {
       await apiRequest("POST", "/api/recorder/stop", {});
@@ -98,7 +97,7 @@ export function BrowserRecorder() {
       });
     }
   };
-  
+
   const handlePlayRecording = async () => {
     if (recordedSteps.length === 0) {
       toast({
@@ -108,17 +107,17 @@ export function BrowserRecorder() {
       });
       return;
     }
-    
+
     try {
       setIsPlaying(true);
       setShowBrowser(true);
-      
+
       await apiRequest("POST", "/api/recorder/play", {
         testName,
         browser,
         steps: recordedSteps,
       });
-      
+
       toast({
         title: "Test execution complete",
         description: "The test has been executed successfully",
@@ -133,7 +132,7 @@ export function BrowserRecorder() {
       setIsPlaying(false);
     }
   };
-  
+
   const handleSaveTest = async () => {
     if (recordedSteps.length === 0) {
       toast({
@@ -143,7 +142,7 @@ export function BrowserRecorder() {
       });
       return;
     }
-    
+
     try {
       await apiRequest("POST", "/api/tests", {
         name: testName,
@@ -151,12 +150,12 @@ export function BrowserRecorder() {
         browser,
         steps: recordedSteps,
       });
-      
+
       toast({
         title: "Test saved",
         description: "The test has been saved successfully",
       });
-      
+
       // Invalidate queries to refresh lists
       queryClient.invalidateQueries({ queryKey: ["/api/tests"] });
     } catch (error) {
@@ -167,11 +166,13 @@ export function BrowserRecorder() {
       });
     }
   };
-  
+
   const handleClearSteps = () => {
-    setRecordedSteps([]);
+    if (window.confirm("Are you sure you want to clear all recorded steps?")) {
+      setRecordedSteps([]);
+    }
   };
-  
+
   const handleExportSteps = () => {
     const dataStr = JSON.stringify({
       testName,
@@ -179,29 +180,33 @@ export function BrowserRecorder() {
       browser,
       steps: recordedSteps,
     });
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', `${testName || 'test'}.json`);
+    const dataUri = "data:application/json;charset=utf-8," + encodeURIComponent(dataStr);
+    const linkElement = document.createElement("a");
+    linkElement.setAttribute("href", dataUri);
+    linkElement.setAttribute("download", `${testName || "test"}.json`);
     linkElement.click();
   };
-  
+
   const handleImportSteps = (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileInput = e.target;
     if (fileInput.files && fileInput.files.length > 0) {
       const file = fileInput.files[0];
       const reader = new FileReader();
-      
+
       reader.onload = (event) => {
         try {
           const result = event.target?.result as string;
           const importedData = JSON.parse(result);
-          
-          setTestName(importedData.testName || "");
-          setTargetUrl(importedData.targetUrl || "");
+
+          if (!importedData.testName || !importedData.targetUrl || !Array.isArray(importedData.steps)) {
+            throw new Error("Invalid test file format");
+          }
+
+          setTestName(importedData.testName);
+          setTargetUrl(importedData.targetUrl);
           setBrowser(importedData.browser || "Chrome");
-          setRecordedSteps(importedData.steps || []);
-          
+          setRecordedSteps(importedData.steps);
+
           toast({
             title: "Test imported",
             description: "The test has been imported successfully",
@@ -209,22 +214,22 @@ export function BrowserRecorder() {
         } catch (error) {
           toast({
             title: "Failed to import test",
-            description: "Invalid test file format",
+            description: error instanceof Error ? error.message : "Invalid test file format",
             variant: "destructive",
           });
         }
       };
-      
+
       reader.readAsText(file);
-      
+
       // Reset the file input value so the same file can be imported again
       fileInput.value = "";
     }
   };
 
-  const handleBrowserAction = (action: {type: string; selector: string; value?: string; text?: string}) => {
+  const handleBrowserAction = (action: { type: string; selector: string; value?: string; text?: string }) => {
     let stepDescription = "";
-    
+
     switch (action.type) {
       case "click":
         stepDescription = action.text
@@ -245,10 +250,10 @@ export function BrowserRecorder() {
       default:
         return;
     }
-    
+
     if (stepDescription && !recordedSteps.includes(stepDescription)) {
-      setRecordedSteps(prev => [...prev, stepDescription]);
-      
+      setRecordedSteps((prev) => [...prev, stepDescription]);
+
       toast({
         title: "Action recorded",
         description: stepDescription,
@@ -272,7 +277,7 @@ export function BrowserRecorder() {
               <TabsTrigger value="recorder">Recorder</TabsTrigger>
               <TabsTrigger value="settings">Settings</TabsTrigger>
             </TabsList>
-            
+
             <TabsContent value="recorder">
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                 <div className="space-y-6">
@@ -287,7 +292,7 @@ export function BrowserRecorder() {
                         disabled={isRecording || isPlaying}
                       />
                     </div>
-                    
+
                     <div>
                       <Label htmlFor="fullTargetUrl">Target URL</Label>
                       <Input
@@ -299,7 +304,7 @@ export function BrowserRecorder() {
                         disabled={isRecording || isPlaying}
                       />
                     </div>
-                    
+
                     <div>
                       <Label htmlFor="fullBrowser">Browser</Label>
                       <Select
@@ -319,19 +324,23 @@ export function BrowserRecorder() {
                       </Select>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center justify-between">
                     <div className="space-x-2">
                       <Button
-                        variant={isRecording ? "destructive" : "outline"}
+                        className={isRecording ? "btn-destructive" : "btn-outline"}
                         onClick={isRecording ? handleStopRecording : handleStartRecording}
                         disabled={isPlaying || (!isRecording && (!testName || !targetUrl))}
                       >
-                        {isRecording ? <Square className="mr-2 h-4 w-4" /> : <span className="material-icons mr-1">fiber_manual_record</span>}
+                        {isRecording ? (
+                          <Square className="mr-2 h-4 w-4" />
+                        ) : (
+                          <span className="material-icons mr-1">fiber_manual_record</span>
+                        )}
                         {isRecording ? "Stop" : "Record"}
                       </Button>
                       <Button
-                        variant="outline"
+                        className="btn-outline"
                         onClick={handlePlayRecording}
                         disabled={isRecording || isPlaying || recordedSteps.length === 0}
                       >
@@ -339,19 +348,17 @@ export function BrowserRecorder() {
                         Play
                       </Button>
                     </div>
-                    
+
                     <div className="space-x-2">
                       <Button
-                        variant="ghost"
-                        size="icon"
+                        className="btn-ghost"
                         onClick={handleClearSteps}
                         disabled={recordedSteps.length === 0 || isRecording || isPlaying}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                       <Button
-                        variant="ghost"
-                        size="icon"
+                        className="btn-ghost"
                         onClick={handleSaveTest}
                         disabled={recordedSteps.length === 0 || isRecording || isPlaying}
                       >
@@ -359,16 +366,14 @@ export function BrowserRecorder() {
                       </Button>
                     </div>
                   </div>
-                  
+
                   {/* Recorded Steps Panel */}
                   <div className="border rounded-lg overflow-hidden">
                     <div className="bg-slate-100 px-3 py-2 border-b flex items-center justify-between">
                       <h3 className="text-sm font-medium text-slate-700">Recorded Steps</h3>
                       <div className="flex items-center space-x-1">
                         <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
+                          className="btn-ghost h-8 w-8"
                           onClick={handleExportSteps}
                           disabled={recordedSteps.length === 0 || isRecording || isPlaying}
                         >
@@ -384,18 +389,14 @@ export function BrowserRecorder() {
                             disabled={isRecording || isPlaying}
                           />
                           <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
+                            className="btn-ghost h-8 w-8"
                             disabled={isRecording || isPlaying}
                           >
                             <Upload className="h-4 w-4 text-slate-500" />
                           </Button>
                         </div>
                         <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
+                          className="btn-ghost h-8 w-8"
                           onClick={handleClearSteps}
                           disabled={recordedSteps.length === 0 || isRecording || isPlaying}
                         >
@@ -406,20 +407,20 @@ export function BrowserRecorder() {
                     <RecordedSteps steps={recordedSteps} height="h-[200px]" />
                   </div>
                 </div>
-                
+
                 {/* Embedded Browser */}
                 {(showBrowser || isRecording || isPlaying) && (
                   <div className="order-first xl:order-none">
-                    <EmbeddedBrowser 
-                      targetUrl={targetUrl} 
-                      isRecording={isRecording} 
+                    <EmbeddedBrowser
+                      targetUrl={targetUrl}
+                      isRecording={isRecording}
                       onAction={handleBrowserAction}
                     />
                   </div>
                 )}
               </div>
             </TabsContent>
-            
+
             <TabsContent value="settings">
               <div className="space-y-4">
                 <div>
@@ -435,7 +436,7 @@ export function BrowserRecorder() {
                     </SelectContent>
                   </Select>
                 </div>
-                
+
                 <div>
                   <Label htmlFor="timeout">Element Timeout (seconds)</Label>
                   <Input
@@ -446,7 +447,7 @@ export function BrowserRecorder() {
                     max="60"
                   />
                 </div>
-                
+
                 <div>
                   <Label htmlFor="waitBetweenSteps">Wait Between Steps (ms)</Label>
                   <Input
@@ -458,15 +459,13 @@ export function BrowserRecorder() {
                     step="100"
                   />
                 </div>
-                
+
                 <div className="pt-4">
-                  <Button variant="outline" className="mr-2">
+                  <Button className="btn-outline mr-2">
                     <Settings className="mr-2 h-4 w-4" />
                     Reset to Defaults
                   </Button>
-                  <Button>
-                    Save Settings
-                  </Button>
+                  <Button>Save Settings</Button>
                 </div>
               </div>
             </TabsContent>

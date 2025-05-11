@@ -1,24 +1,24 @@
-import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { SearchIcon, PlayIcon, CircleIcon, SaveIcon } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import TestSteps from "@/components/TestBuilder/TestSteps";
 import ActionToolbox from "@/components/TestBuilder/ActionToolbox";
 import ElementInspector from "@/components/TestBuilder/ElementInspector";
-import TestResults from "@/components/TestBuilder/TestResults";
 import RecordingModal from "@/components/TestBuilder/RecordingModal";
-import { Test, TestAction, TestStep, SelectedElement, TestResult } from "@/lib/types";
+import TestResults from "@/components/TestBuilder/TestResults";
+import TestSteps from "@/components/TestBuilder/TestSteps";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { SelectedElement, Test, TestAction, TestResult, TestStep } from "@/lib/types";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CircleIcon, PlayIcon, SaveIcon, SearchIcon } from "lucide-react";
+import { useState } from "react";
 
 export default function TestBuilder() {
   const [test, setTest] = useState<Test>({
     id: 0,
-    name: 'New Test',
+    name: "New Test",
     suiteId: 1,
-    steps: []
+    steps: [],
   });
   const [isRecording, setIsRecording] = useState(false);
   const [lastRecordedAction, setLastRecordedAction] = useState<string | null>(null);
@@ -28,22 +28,22 @@ export default function TestBuilder() {
   const queryClient = useQueryClient();
 
   // Get test suites for dropdown
-  const { data: testSuites } = useQuery({
-    queryKey: ['/api/test-suites'],
+  const { data: testSuites } = useQuery<Array<{ id: number; name: string }>>({
+    queryKey: ["/api/test-suites"],
   });
 
   // Save test mutation
   const saveTestMutation = useMutation({
     mutationFn: (testData: Partial<Test>) => {
-      return apiRequest('POST', '/api/tests', testData);
+      return apiRequest("POST", "/api/tests", testData);
     },
     onSuccess: (response) => {
       response.json().then((savedTest) => {
         setTest(savedTest);
-        queryClient.invalidateQueries({ queryKey: ['/api/tests'] });
+        queryClient.invalidateQueries({ queryKey: ["/api/tests"] });
         toast({
           title: "Test saved",
-          description: "Your test has been saved successfully"
+          description: "Your test has been saved successfully",
         });
       });
     },
@@ -51,22 +51,22 @@ export default function TestBuilder() {
       toast({
         title: "Error saving test",
         description: error.message,
-        variant: "destructive"
+        variant: "destructive",
       });
-    }
+    },
   });
 
   // Run test mutation
   const runTestMutation = useMutation({
     mutationFn: (testId: number) => {
-      return apiRequest('POST', `/api/tests/${testId}/run`, {});
+      return apiRequest("POST", `/api/tests/${testId}/run`, {});
     },
     onSuccess: (response) => {
       response.json().then((results) => {
         setTestResults(results);
         toast({
           title: "Test execution completed",
-          description: `${results.passed} steps passed, ${results.failed} steps failed`
+          description: `${results.passed} steps passed, ${results.failed} steps failed`,
         });
       });
     },
@@ -74,93 +74,94 @@ export default function TestBuilder() {
       toast({
         title: "Error running test",
         description: error.message,
-        variant: "destructive"
+        variant: "destructive",
       });
-    }
+    },
   });
 
   const handleRecord = () => {
+    if (!test.name.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Test name cannot be empty.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsRecording(true);
-    
-    // Start recording via websocket or API
-    fetch('/api/recording/start', {
-      method: 'POST',
+
+    fetch("/api/recording/start", {
+      method: "POST",
     })
-      .then(res => res.json())
+      .then((res) => res.json())
       .then(() => {
-        // Listen for recorded actions via WebSocket or polling
-        // Determine if we should use secure WebSockets based on the page protocol
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws = new WebSocket(`${protocol}//${window.location.host}/api/recording/ws`);
-        
+        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        const ws = new WebSocket(`${protocol}//${window.location.hostname}:5501/ws`);
+
         ws.onopen = () => {
-          console.log('WebSocket connection established');
+          console.log("WebSocket connection established");
         };
-        
+
         ws.onerror = (error) => {
-          console.error('WebSocket error:', error);
+          console.error("WebSocket error:", error);
           toast({
             title: "WebSocket Connection Error",
             description: "Could not establish real-time communication",
-            variant: "destructive"
+            variant: "destructive",
           });
         };
-        
+
         ws.onmessage = (event) => {
           const data = JSON.parse(event.data);
-          if (data.type === 'action') {
+          if (data.type === "action") {
             setLastRecordedAction(data.description);
-            
-            // Add the step to the test
-            setTest(prev => ({
+
+            setTest((prev) => ({
               ...prev,
-              steps: [...prev.steps, data.step]
+              steps: [...prev.steps, data.step],
             }));
           }
         };
-        
-        // Clean up WebSocket on component unmount
+
         return () => ws.close();
       })
-      .catch(error => {
+      .catch((error) => {
         toast({
           title: "Error starting recording",
           description: error.message,
-          variant: "destructive"
+          variant: "destructive",
         });
         setIsRecording(false);
       });
   };
 
   const handleStopRecording = () => {
+    if (!window.confirm("Are you sure you want to stop recording?")) return;
+
     setIsRecording(false);
-    
-    // Stop recording via API
-    fetch('/api/recording/stop', {
-      method: 'POST',
+
+    fetch("/api/recording/stop", {
+      method: "POST",
     });
   };
 
   const handleElementPicker = () => {
     toast({
       title: "Element selector activated",
-      description: "Click on any element in your web page to select it"
+      description: "Click on any element in your web page to select it",
     });
-    
-    // Element picker logic would be implemented with a browser extension
-    // or iframe integration in a real implementation
-    
-    // Mock selection for demo
+
     setTimeout(() => {
       setSelectedElement({
         selector: '#login-form input[name="username"]',
-        type: 'input',
-        tagName: 'INPUT',
+        type: "input",
+        tagName: "INPUT",
         attributes: {
-          type: 'text',
-          name: 'username',
-          placeholder: 'Username'
-        }
+          type: "text",
+          name: "username",
+          placeholder: "Username",
+        },
       });
     }, 1000);
   };
@@ -169,98 +170,108 @@ export default function TestBuilder() {
     saveTestMutation.mutate({
       name: test.name,
       suiteId: test.suiteId,
-      steps: test.steps
+      steps: test.steps,
     });
   };
 
   const handlePlayback = () => {
     if (test.id === 0) {
-      // Save test first if it's new
-      saveTestMutation.mutate({
-        name: test.name,
-        suiteId: test.suiteId,
-        steps: test.steps
-      }, {
-        onSuccess: (response) => {
-          response.json().then((savedTest) => {
-            setTest(savedTest);
-            runTestMutation.mutate(savedTest.id);
-          });
+      saveTestMutation.mutate(
+        {
+          name: test.name,
+          suiteId: test.suiteId,
+          steps: test.steps,
+        },
+        {
+          onSuccess: (response) => {
+            response.json().then((savedTest) => {
+              setTest(savedTest);
+              runTestMutation.mutate(savedTest.id);
+            });
+          }
         }
-      });
+      );
     } else {
       runTestMutation.mutate(test.id);
     }
   };
 
   const handleAction = (action: TestAction) => {
-    // Process dropped or selected action
-    if (selectedElement && (action.type === 'click' || action.type === 'type' || action.type === 'verify')) {
+    if (selectedElement && (action.type === "click" || action.type === "type" || action.type === "verify")) {
       const newStep: Partial<TestStep> = {
         type: action.type,
         order: test.steps.length,
-        selector: selectedElement.selector
+        selector: selectedElement.selector,
       };
-      
-      if (action.type === 'type') {
-        newStep.text = '';
-      } else if (action.type === 'verify') {
-        newStep.condition = 'exists';
+
+      if (action.type === "type") {
+        newStep.text = "";
+      } else if (action.type === "verify") {
+        newStep.condition = "exists";
       }
-      
-      setTest(prev => ({
+
+      setTest((prev) => ({
         ...prev,
-        steps: [...prev.steps, newStep as TestStep]
+        steps: [...prev.steps, newStep as TestStep],
       }));
-      
+
       toast({
         title: "Step added",
-        description: `${action.type} action added for element ${selectedElement.selector}`
+        description: `${action.type} action added for element ${selectedElement.selector}`,
       });
-    } else if (action.type === 'navigate') {
-      setTest(prev => ({
+    } else if (action.type === "navigate") {
+      setTest((prev) => ({
         ...prev,
-        steps: [...prev.steps, {
-          id: Date.now(), // Temporary ID
-          type: 'navigate',
-          order: test.steps.length,
-          url: 'https://example.com'
-        }]
+        steps: [
+          ...prev.steps,
+          {
+            id: Date.now(),
+            type: "navigate",
+            order: test.steps.length,
+            url: "https://example.com",
+          },
+        ],
       }));
-      
+
       toast({
         title: "Step added",
-        description: "Navigate action added"
+        description: "Navigate action added",
       });
-    } else if (action.type === 'wait') {
-      setTest(prev => ({
+    } else if (action.type === "wait") {
+      setTest((prev) => ({
         ...prev,
-        steps: [...prev.steps, {
-          id: Date.now(), // Temporary ID
-          type: 'wait',
-          order: test.steps.length,
-          duration: 1000
-        }]
+        steps: [
+          ...prev.steps,
+          {
+            id: Date.now(),
+            type: "wait",
+            order: test.steps.length,
+            duration: 1000,
+          },
+        ],
       }));
-      
+
       toast({
         title: "Step added",
-        description: "Wait action added"
+        description: "Wait action added",
       });
-    } else if (action.type === 'scroll') {
-      setTest(prev => ({
+    } else if (action.type === "scroll") {
+      setTest((prev) => ({
         ...prev,
-        steps: [...prev.steps, {
-          id: Date.now(), // Temporary ID
-          type: 'scroll',
-          order: test.steps.length,
-          direction: 'down'
-        }]
+        steps: [
+          ...prev.steps,
+          {
+            id: Date.now(),
+            type: "scroll",
+            order: test.steps.length,
+            direction: "down",
+          },
+        ],
       }));
-      
+
       toast({
         title: "Step added",
-        description: "Scroll action added"
+        description: "Scroll action added",
       });
     }
   };
@@ -272,61 +283,45 @@ export default function TestBuilder() {
         <p className="text-gray-600">Create, edit, and execute your automated tests</p>
       </div>
 
-      {/* Test Configuration & Actions */}
       <div className="flex mb-6 space-x-4">
         <div className="bg-white shadow rounded-lg p-4 flex-1 border border-gray-200">
           <h2 className="text-lg font-medium text-gray-800 mb-2">Quick Actions</h2>
           <div className="flex space-x-2">
-            <Button 
-              onClick={handleRecord}
-              className="bg-primary hover:bg-blue-600 text-white"
-            >
+            <Button onClick={handleRecord} className="bg-primary hover:bg-blue-600 text-white">
               <CircleIcon className="h-4 w-4 mr-1.5 text-red-500 fill-red-500" />
               Record
             </Button>
-            <Button 
-              onClick={handlePlayback}
-              variant="outline"
-              className="bg-gray-100 hover:bg-gray-200 text-gray-700"
-            >
+            <Button onClick={handlePlayback} variant="outline" className="bg-gray-100 hover:bg-gray-200 text-gray-700">
               <PlayIcon className="h-4 w-4 mr-1.5" />
               Play
             </Button>
-            <Button 
-              onClick={handleElementPicker}
-              variant="outline"
-              className="bg-gray-100 hover:bg-gray-200 text-gray-700"
-            >
+            <Button onClick={handleElementPicker} variant="outline" className="bg-gray-100 hover:bg-gray-200 text-gray-700">
               <SearchIcon className="h-4 w-4 mr-1.5" />
               Select Element
             </Button>
-            <Button 
-              onClick={handleSave}
-              variant="outline"
-              className="bg-gray-100 hover:bg-gray-200 text-gray-700"
-            >
+            <Button onClick={handleSave} variant="outline" className="bg-gray-100 hover:bg-gray-200 text-gray-700">
               <SaveIcon className="h-4 w-4 mr-1.5" />
               Save
             </Button>
           </div>
         </div>
-        
+
         <div className="bg-white shadow rounded-lg p-4 flex-1 border border-gray-200">
           <h2 className="text-lg font-medium text-gray-800 mb-2">Test Configuration</h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Test Name</label>
-              <Input 
-                type="text" 
-                value={test.name} 
+              <Input
+                type="text"
+                value={test.name}
                 onChange={(e) => setTest({ ...test, name: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Test Suite</label>
-              <Select 
-                value={test.suiteId.toString()} 
+              <Select
+                value={test.suiteId.toString()}
                 onValueChange={(value) => setTest({ ...test, suiteId: parseInt(value) })}
               >
                 <SelectTrigger className="w-full px-3 py-2 border border-gray-300 rounded-md">
@@ -345,33 +340,27 @@ export default function TestBuilder() {
         </div>
       </div>
 
-      {/* Test Builder Grid */}
       <div className="grid grid-cols-3 gap-6">
         <TestSteps testId={test.id} testSteps={test.steps} />
-        
+
         <div className="col-span-1">
           <ActionToolbox onActionSelected={handleAction} />
-          <ElementInspector 
-            selectedElement={selectedElement} 
-            onSelectElement={handleElementPicker} 
-          />
+          <ElementInspector selectedElement={selectedElement} onSelectElement={handleElementPicker} />
         </div>
       </div>
 
-      {/* Test Results */}
       <TestResults testResults={testResults} />
 
-      {/* Recording Modal */}
-      <RecordingModal 
-        isOpen={isRecording} 
-        onClose={handleStopRecording} 
+      <RecordingModal
+        isOpen={isRecording}
+        onClose={handleStopRecording}
         onPause={() => {
           toast({
             title: "Recording paused",
-            description: "You can resume recording anytime"
+            description: "You can resume recording anytime",
           });
-        }} 
-        lastAction={lastRecordedAction} 
+        }}
+        lastAction={lastRecordedAction}
       />
     </div>
   );

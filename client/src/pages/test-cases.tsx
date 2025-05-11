@@ -1,11 +1,4 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Search, Plus, Edit, Trash2, Play, Eye, MoreHorizontal } from "lucide-react";
-import { Test } from "@shared/schema";
-import { StatusBadge } from "@/components/ui/status-badge";
-import { Link } from "wouter";
 import {
   Card,
   CardContent,
@@ -14,6 +7,15 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { StatusBadge, StatusType } from "@/components/ui/status-badge";
+import {
   Table,
   TableBody,
   TableCell,
@@ -21,27 +23,42 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Skeleton } from "@/components/ui/skeleton";
+import { useQuery } from "@tanstack/react-query";
+import { Edit, Eye, MoreHorizontal, Play, Plus, Search } from "lucide-react";
+import { useState } from "react";
+import { Link } from "wouter";
+
+// Ensure the LocalTest type includes the 'steps' property with the correct type
+type LocalTest = {
+  id: string;
+  name: string;
+  browser: string;
+  lastRun?: string;
+  lastStatus?: string;
+  steps: { id: string; description: string }[]; // Adjust the type as per your schema
+};
 
 export default function TestCases() {
   const [searchQuery, setSearchQuery] = useState("");
-  
-  const { data: tests, isLoading } = useQuery<Test[]>({
+
+  const { data: tests, isLoading, isError } = useQuery<LocalTest[]>({
     queryKey: ["/api/tests"],
+    queryFn: async () => {
+      const response = await fetch("/api/tests");
+      if (!response.ok) {
+        throw new Error("Failed to fetch test cases");
+      }
+      return response.json();
+    },
   });
-  
-  const filteredTests = tests?.filter(
-    test => test.name.toLowerCase().includes(searchQuery.toLowerCase())
+
+  const filteredTests = tests?.filter((test) =>
+    test.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
-  
+
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Test Cases</h1>
@@ -54,7 +71,8 @@ export default function TestCases() {
           </Button>
         </Link>
       </div>
-      
+
+      {/* Card */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex justify-between items-center">
@@ -89,6 +107,10 @@ export default function TestCases() {
                 </div>
               ))}
             </div>
+          ) : isError ? (
+            <div className="text-center py-8 text-red-500">
+              Failed to load test cases. Please try again later.
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -108,30 +130,47 @@ export default function TestCases() {
                     <TableCell>{test.browser}</TableCell>
                     <TableCell>{test.lastRun || "Never"}</TableCell>
                     <TableCell>
-                      <StatusBadge status={test.lastStatus || "pending"} />
+                      <StatusBadge status={(test.lastStatus as StatusType) || "pending"} />
                     </TableCell>
                     <TableCell>{test.steps.length}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end space-x-1">
-                        <Button variant="ghost" size="icon" title="Run Test">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Run Test"
+                          aria-label="Run Test"
+                        >
                           <Play className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" title="Edit Test">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Edit Test"
+                          aria-label="Edit Test"
+                        >
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" title="View Details">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="View Details"
+                          aria-label="View Details"
+                        >
                           <Eye className="h-4 w-4" />
                         </Button>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
+                            <Button variant="ghost" size="icon" aria-label="More Actions">
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem>Duplicate</DropdownMenuItem>
                             <DropdownMenuItem>Export</DropdownMenuItem>
-                            <DropdownMenuItem className="text-red-600">Delete</DropdownMenuItem>
+                            <DropdownMenuItem className="text-red-600">
+                              Delete
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>

@@ -1,18 +1,18 @@
-import { useQuery } from "@tanstack/react-query";
-import { StatusBadge } from "@/components/ui/status-badge";
-import { TestExecution } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { 
-  PlayCircle, 
-  MoreVertical, 
+import { Skeleton } from "@/components/ui/skeleton";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import { TestExecution } from "@shared/schema";
+import { useQuery } from "@tanstack/react-query";
+import {
   Chrome,
   Globe,
-  Monitor
+  Monitor,
+  MoreVertical,
+  PlayCircle
 } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
-import { Skeleton } from "@/components/ui/skeleton";
 
 const browserIcons: Record<string, React.ReactNode> = {
   Chrome: <Chrome className="h-4 w-4 mr-1" />,
@@ -52,7 +52,7 @@ export function RecentTests() {
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center">
           <h2 className="font-semibold text-lg text-slate-800">Recent Test Executions</h2>
-          <Button variant="link" size="sm">View All</Button>
+          <Button>View All</Button>
         </div>
         <div className="p-4">
           {[...Array(5)].map((_, index) => (
@@ -70,7 +70,7 @@ export function RecentTests() {
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
       <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center">
         <h2 className="font-semibold text-lg text-slate-800">Recent Test Executions</h2>
-        <Button variant="link" size="sm">View All</Button>
+        <Button>View All</Button>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -110,15 +110,13 @@ export function RecentTests() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <Button 
-                    variant="ghost" 
-                    size="icon" 
                     onClick={() => runTest(test.id)}
                     disabled={playingTest === test.id}
                     className="h-8 w-8 mr-1"
                   >
                     <span className="material-icons text-sm">play_arrow</span>
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Button className="h-8 w-8">
                     <MoreVertical className="h-4 w-4 text-slate-400" />
                   </Button>
                 </td>

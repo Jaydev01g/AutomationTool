@@ -1,21 +1,19 @@
-import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { 
-  PlayIcon, 
-  PauseIcon, 
-  StopIcon, 
-  CheckCircleIcon, 
-  XCircleIcon, 
-  TimerIcon, 
-  ArrowDownIcon,
-  ArrowUpIcon
-} from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { Test, TestRun } from "@/lib/types";
-import { Progress } from "@/components/ui/progress";
+import { useQuery } from "@tanstack/react-query";
+import {
+  CheckCircleIcon,
+  PauseIcon,
+  PlayIcon,
+  SoupIcon,
+  TimerIcon,
+  XCircleIcon
+} from "lucide-react";
+import { useState } from "react";
 
 export default function TestExecution() {
   const [selectedTests, setSelectedTests] = useState<number[]>([]);
@@ -26,7 +24,7 @@ export default function TestExecution() {
     queryKey: ['/api/tests'],
   });
 
-  const { data: testSuites, isLoading: suitesLoading } = useQuery({
+  const { data: testSuites, isLoading: suitesLoading } = useQuery<{ id: number; name: string }[]>({
     queryKey: ['/api/test-suites'],
   });
 
@@ -195,7 +193,7 @@ export default function TestExecution() {
                 Pause
               </Button>
               <Button variant="outline" size="sm" disabled={currentExecution.status !== 'running'}>
-                <StopIcon className="h-4 w-4 mr-1" />
+                <SoupIcon className="h-4 w-4 mr-1" />
                 Stop
               </Button>
             </div>
