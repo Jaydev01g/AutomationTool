@@ -4,30 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useWebSocket } from "@/hooks/use-websocket";
-import { useEffect, useRef, useState } from "react";
-
-// Toast Component
-function Toast({ message, onClose }: { message: string; onClose: () => void }) {
-  useEffect(() => {
-    const timer = setTimeout(onClose, 3000);
-    return () => clearTimeout(timer);
-  }, [onClose]);
-
-  return (
-    <div className="fixed bottom-4 right-4 bg-slate-800 text-white px-4 py-2 rounded shadow-lg">
-      {message}
-    </div>
-  );
-}
-
-// Utility to generate CSS selectors
-const generateSelector = (element: HTMLElement): string => {
-  if (element.id) return `#${element.id}`;
-  if (element.className && typeof element.className === "string") {
-    return `.${element.className.replace(/\s+/g, ".")}`;
-  }
-  return element.tagName.toLowerCase();
-};
+import { useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 export default function TestRecorder() {
   const [testName, setTestName] = useState("");
@@ -36,11 +14,12 @@ export default function TestRecorder() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordedSteps, setRecordedSteps] = useState<string[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentUrl, setCurrentUrl] = useState("");
-  const [urlInput, setUrlInput] = useState("");
   const [toast, setToast] = useState<string | null>(null);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-
+  const newWindowRef = useRef<Window | null>(null);
+  const [searchParams] = useSearchParams();
+  const mode =searchParams.get("mode");
+  const isDragDropMode = mode === "drag-drop";
+  const isRecordPlayMode = mode === "record-play";
   // WebSocket setup
   const { connected, sendMessage } = useWebSocket({
     onMessage: (event: MessageEvent) => {
@@ -52,6 +31,13 @@ export default function TestRecorder() {
         } else if (data.type === "INIT") {
           setIsRecording(data.isRecording);
           if (data.steps?.length) setRecordedSteps(data.steps);
+        } else if (data.type === "RECORDING_STARTED") {
+          setIsRecording(true);
+          showToast("Recording started.");
+        } else if (data.type === "RECORDING_STOPPED") {
+          setIsRecording(false);
+          setRecordedSteps(data.steps || []);
+          showToast("Recording stopped.");
         }
       } catch (error) {
         console.error("Error parsing WebSocket message:", error);
@@ -59,29 +45,25 @@ export default function TestRecorder() {
     },
     onOpen: () => console.log("WebSocket connected"),
     onClose: () => console.log("WebSocket disconnected"),
-    onError: (error: any) =>{ 
+    onError: (error: any) => {
       console.error("WebSocket error:", error);
       showToast("WebSocket error. Some features may not work.");
-    }
-    });
+    },
+  });
 
   const showToast = (message: string) => setToast(message);
-  const [loading, setLoading] = useState(true);
+
   const handleStartRecording = async () => {
-    if(!testName.trim()) {
+    if (!testName.trim()) {
       showToast("Please enter a test name.");
       return;
     }
-    if(!/^https?:\/\//.test(targetUrl)) {
+    if (!/^https?:\/\//.test(targetUrl)) {
       showToast("Please enter a valid URL (http or https).");
       return;
     }
-    try {
-      setIsRecording(true);
-      setRecordedSteps([`Navigate to ${targetUrl}`]);
-      setCurrentUrl(targetUrl);
-      setUrlInput(targetUrl);
 
+    try {
       const response = await fetch("/api/recorder/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -90,13 +72,10 @@ export default function TestRecorder() {
 
       if (!response.ok) throw new Error("Failed to start recording");
 
-      sendMessage({ type: "RECORDING_STATUS", isRecording: true, testName, targetUrl, browser });
+      sendMessage({ type: "START_RECORDING", targetUrl });
       showToast("Recording started. Interact with the browser.");
     } catch {
       showToast("Failed to start recording");
-      setIsRecording(false);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -105,14 +84,12 @@ export default function TestRecorder() {
       const response = await fetch("/api/recorder/stop", { method: "POST" });
       if (!response.ok) throw new Error("Failed to stop recording");
 
-      sendMessage({ type: "RECORDING_STATUS", isRecording: false, steps: recordedSteps });
+      sendMessage({ type: "STOP_RECORDING" });
       setIsRecording(false);
       showToast("Recording stopped. Test steps captured.");
     } catch (error) {
       console.error("Error stopping recording:", error);
       showToast("Failed to stop recording");
-    } finally {
-      setIsRecording(false);
     }
   };
 
@@ -138,101 +115,179 @@ export default function TestRecorder() {
       setIsPlaying(false);
     }
   };
+
+  const handleLaunchNewWindow = () => {
+    debugger;
+    if (!/^https?:\/\//.test(targetUrl)) {
+      showToast("Please provide a valid URL.");
+      debugger;
+      return;
+    }
+
+    newWindowRef.current = window.open(
+      targetUrl,
+      "_blank",
+      "width=1200,height=800,scrollbars=yes,resizable=yes"
+    );
+    debugger;
+    if (newWindowRef.current) {
+      newWindowRef.current.onload = () => {
+        debugger;
+        try {
+          if (newWindowRef.current && newWindowRef.current.document) {
+            debugger;
+            const scriptContent = `
+              (function() {
+                const recordAction = (action) => {
+                  window.opener.postMessage({ type: "ACTION_RECORDED", action }, window.location.origin);
+                };
+
+                document.addEventListener('click', (event) => {
+                  const target = event.target;
+                  const action = {
+                    description: \`Clicked on \${target.tagName}\${target.id ? \`#\${target.id}\` : ""}\`,
+                    step: {
+                      type: "click",
+                      selector: target.id ? \`#\${target.id}\` : "",
+                    },
+                  };
+                  recordAction(action.description);
+                });
+                document.addEventListener('input', (event) => {
+                  const target = event.target;
+                  const action = {
+                    description: \`Input in \${target.tagName}\${target.id ? \`#\${target.id}\` : ""}\`,
+                    step: {
+                      type: "input",
+                      selector: target.id ? \`#\${target.id}\` : "",
+                    },
+                  };
+                  recordAction(action.description);
+                }
+                document.addEventListener('keydown', (event) => {
+                  const action = {
+                    description: \`Key pressed: \${event.key}\`,
+                    step: {
+                      type: "keydown",
+                      key: event.key,
+                    },
+                  };
+                  recordAction(action.description);
+                });
+                document.addEventListener('scroll', () => {
+                  const action = {
+                    description: "Page scrolled",
+                    step: {
+                      type: "scroll",
+                    },
+                  };
+                  recordAction(action.description);
+                });
+                document.addEventListener('mousemove', (event) => {
+                  const action = {
+                    description: \`Mouse moved to: \${event.clientX}, \${event.clientY}\`,
+                    step: {
+                      type: "mousemove",
+                      x: event.clientX,
+                      y: event.clientY,
+                    },
+                  };
+                  recordAction(action.description);
+                });
+                document.addEventListener('contextmenu', (event) => {
+                  const target = event.target;
+                  const action = {
+                    description: \`Right-clicked on \${target.tagName}\${target.id ? \`#\${target.id}\` : ""}\`,
+                    step: {
+                      type: "contextmenu",
+                      selector: target.id ? \`#\${target.id}\` : "",
+                    },
+                  };
+                  recordAction(action.description);
+                });
+                document.addEventListener('dblclick', (event) => {
+                  const target = event.target;
+                  const action = {
+                    description: \`Double-clicked on \${target.tagName}\${target.id ? \`#\${target.id}\` : ""}\`,
+                    step: {
+                      type: "dblclick",
+                      selector: target.id ? \`#\${target.id}\` : "",
+                    },
+                  };
+                  recordAction(action.description);
+                });
+
+                document.addEventListener('dragstart', (event) => {
+                  const target = event.target;
+                  const action = {
+                    description: \`Drag started on \${target.tagName}\${target.id ? \`#\${target.id}\` : ""}\`,
+                    step: {
+                      type: "dragstart",
+                      selector: target.id ? \`#\${target.id}\` : "",
+                    },
+                  };
+                  recordAction(action.description);
+                }
+                document.addEventListener('drop', (event) => {
+                  const target = event.target;
+                  const action = {
+                    description: \`Dropped on \${target.tagName}\${target.id ? \`#\${target.id}\` : ""}\`,
+                    step: {
+                      type: "drop",
+                      selector: target.id ? \`#\${target.id}\` : "",
+                    },
+                  };
+                  recordAction(action.description);
+                });
+                document.addEventListener('resize', () => {
+                  const action = {
+                    description: "Window resized",
+                    step: {
+                      type: "resize",
+                    },
+                  };
+                  recordAction(action.description);
+                });
+                document.addEventListener('beforeunload', () => {
+                  const action = {
+                    description: "Window closed",
+                    step: {
+                      type: "close",
+                    },
+                  };
+                  recordAction(action.description);
+                });
+                window.addEventListener('message', (event) => {
+                  if (event.origin !== window.location.origin) return;
+                  if (event.data.type === "ACTION_RECORDED") {
+                    const action = event.data.action;
+                    const actionElement = document.createElement("div");
+                    actionElement.textContent = \`Action recorded: \${action.description}\`;
+                    document.body.appendChild(actionElement);
+                  }
+                });
+              })();
+            `;
+            const script = newWindowRef.current.document.createElement("script");
+            script.textContent = scriptContent;
+            newWindowRef.current.document.body.appendChild(script);
+            debugger;
+          }
+        } catch (error) {
+          console.error("Error injecting script into new window:", error);
+          showToast("Failed to inject script into the new window.");
+          debugger;
+        }
+      };
+    } else {
+      showToast("Failed to open new window. Check your browser settings.");
+    }
+  };
+
   const handleDeleteStep = (index: number) => {
     setRecordedSteps((prev) => prev.filter((_, i) => i !== index));
     showToast(`Deleted step ${index + 1}`);
   };
-  const handleUrlSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!urlInput) return;
-
-    const url = urlInput.startsWith("http") ? urlInput : `https://${urlInput}`;
-    setCurrentUrl(url);
-    if (isRecording) setRecordedSteps((prev) => [...prev, `Navigate to ${url}`]);
-  };
-
-  const handleReload = () => {
-    if (iframeRef.current) iframeRef.current.src = currentUrl;
-  };
-
-  // Inject recording script into iframe
-  useEffect(() => {
-    if (isRecording && iframeRef.current) {
-      const iframe = iframeRef.current;
-      iframe.onload = () => {
-        const doc = iframe.contentDocument || iframe.contentWindow?.document;
-        if (!doc) return;
-  
-        try {
-          const script = doc.createElement("script");
-          script.id="recorder-script";
-          script.textContent = `
-            (function() {
-              const generateSelector = (element) => {
-                if (element.id) return '#' + element.id;
-                if (element.className && typeof element.className === 'string') {
-                  return '.' + element.className.split(' ').join('.');
-                }
-                return element.tagName.toLowerCase();
-              };
-  
-              const describeAction = (event) => {
-                switch (event.type) {
-                  case 'click':
-                    return 'Clicked on ' + generateSelector(event.target);
-                  case 'input':
-                    return 'Entered "' + event.target.value + '" in ' + generateSelector(event.target);
-                  case 'change':
-                    return 'Changed value of ' + generateSelector(event.target);
-                  default:
-                    return 'Performed ' + event.type + ' on ' + generateSelector(event.target);
-                }
-              };
-  
-              const handleEvent = (event) => {
-                const action = describeAction(event);
-                window.parent.postMessage({ type: 'ACTION_RECORDED', action }, '*');
-              };
-  
-              document.addEventListener('click', handleEvent, true);
-              document.addEventListener('input', handleEvent, true);
-              document.addEventListener('change', handleEvent, true);
-            })();
-          `;
-          doc.head.appendChild(script);
-        } catch (error) {
-          console.error("Error injecting script into iframe:", error);
-        }
-      };
-    }
-  }, [isRecording, currentUrl]);
-
-  useEffect(() => {
-    const handleIframeMessage = (event: MessageEvent) => {
-      if (event.data.type === "ACTION_RECORDED") {
-        const action = event.data.action;
-        setRecordedSteps((prev) => {
-          if (prev.includes(action)) {
-            return prev;
-            }
-          return [...prev, action];
-        });
-        showToast(`Recorded: ${action}`);
-      } else if (event.data.type === "RECORDING_STATUS") {
-        const { isRecording, testName, targetUrl, browser } = event.data;
-        setIsRecording(isRecording);
-        if (isRecording) {
-          setTestName(testName);
-          setTargetUrl(targetUrl);
-          setBrowser(browser);
-        }
-      }
-    };
-    window.addEventListener("message", handleIframeMessage);
-    return () => {
-      window.removeEventListener("message", handleIframeMessage);
-    };
-  }, []);
 
   return (
     <div className="p-6">
@@ -243,85 +298,53 @@ export default function TestRecorder() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
-        {/* Test Configuration */}
-        <Card className="xl:col-span-2">
-          <CardHeader>
-            <CardTitle>Test Configuration</CardTitle>
-            <CardDescription>Configure your test parameters</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Label>Test Name</Label>
-            <Input value={testName} onChange={(e) => setTestName(e.target.value)} disabled={isRecording} />
-            <Label>Target URL</Label>
-            <Input value={targetUrl} onChange={(e) => setTargetUrl(e.target.value)} disabled={isRecording} />
-            <Label>Browser</Label>
-            <Select value={browser} onValueChange={setBrowser} disabled={isRecording}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a browser" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Chrome">Chrome</SelectItem>
-                <SelectItem value="Firefox">Firefox</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button onClick={isRecording ? handleStopRecording : handleStartRecording} disabled={loading}>
-              {loading ? "Loading..." : isRecording ? "Stop Recording" : "Start Recording"}
-            </Button>
-            <Button onClick={handlePlayRecording} disabled={isPlaying || !recordedSteps.length}>
-              {isPlaying ? "Playing..." : "Play Recording"}
-            </Button>
-          </CardContent>
-        </Card>
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Test Configuration</CardTitle>
+          <CardDescription>Configure your test parameters</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Label>Test Name</Label>
+          <Input value={testName} onChange={(e) => setTestName(e.target.value)} disabled={isRecording} />
+          <Label>Target URL</Label>
+          <Input value={targetUrl} onChange={(e) => setTargetUrl(e.target.value)} disabled={isRecording} />
+          <Label>Browser</Label>
+          <Select value={browser} onValueChange={setBrowser} disabled={isRecording}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select a browser" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Chrome">Chrome</SelectItem>
+              <SelectItem value="Firefox">Firefox</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button onClick={isRecording ? handleStopRecording : handleStartRecording}>
+            {isRecording ? "Stop Recording" : "Start Recording"}
+          </Button>
+          <Button onClick={handlePlayRecording} disabled={isPlaying || !recordedSteps.length}>
+            {isPlaying ? "Playing..." : "Play Recording"}
+          </Button>
+          <Button onClick={handleLaunchNewWindow}>Launch in New Window</Button>
+        </CardContent>
+      </Card>
 
-        {/* Browser Preview */}
-        <Card className="xl:col-span-3">
-          <CardHeader>
-            <CardTitle>Browser Preview</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleUrlSubmit}>
-              <Input value={urlInput} onChange={(e) => setUrlInput(e.target.value)} />
-              <Button type="submit">Go</Button>
-              <Button onClick={handleReload}>Reload</Button>
-            </form>
-            <iframe ref={iframeRef} src={currentUrl} className="w-full h-96" />
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Recorded Steps */}
-      <Card className="mt-6">
+      <Card>
         <CardHeader>
           <CardTitle>Recorded Steps</CardTitle>
         </CardHeader>
         <CardContent>
           <ul>
             {recordedSteps.map((step, index) => (
-              <li key={index} className="mb-2">
-                {index + 1}. {step}
+              <li key={index} className="flex justify-between items-center mb-2">
+                <span>{index + 1}. {step}</span>
+                <Button variant="destructive" onClick={() => handleDeleteStep(index)}>Delete</Button>
               </li>
             ))}
           </ul>
         </CardContent>
       </Card>
 
-      {/* Delete Step */}
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Delete Step</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {recordedSteps.map((step, index) => (
-            <div key={index} className="flex justify-between items-center mb-2">
-              <span>{index + 1}. {step}</span>
-              <Button variant="destructive" onClick={() => handleDeleteStep(index)}>Delete</Button>
-            </div>
-          ))} 
-        </CardContent>
-      </Card>
-
-      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
+      {toast && <div className="fixed bottom-4 right-4 bg-slate-800 text-white px-4 py-2 rounded shadow-lg">{toast}</div>}
     </div>
   );
 }

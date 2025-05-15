@@ -1,367 +1,212 @@
-import ActionToolbox from "@/components/TestBuilder/ActionToolbox";
-import ElementInspector from "@/components/TestBuilder/ElementInspector";
-import RecordingModal from "@/components/TestBuilder/RecordingModal";
-import TestResults from "@/components/TestBuilder/TestResults";
-import TestSteps from "@/components/TestBuilder/TestSteps";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
-import { SelectedElement, Test, TestAction, TestResult, TestStep } from "@/lib/types";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CircleIcon, PlayIcon, SaveIcon, SearchIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function TestBuilder() {
-  const [test, setTest] = useState<Test>({
-    id: 0,
-    name: "New Test",
-    suiteId: 1,
-    steps: [],
-  });
+  const [ws, setWs] = useState<WebSocket | null>(null);
   const [isRecording, setIsRecording] = useState(false);
-  const [lastRecordedAction, setLastRecordedAction] = useState<string | null>(null);
-  const [selectedElement, setSelectedElement] = useState<SelectedElement | null>(null);
-  const [testResults, setTestResults] = useState<TestResult | null>(null);
+  const [recordedSteps, setRecordedSteps] = useState<string[]>([]);
+  const [targetUrl, setTargetUrl] = useState("https://example.com");
+  const newWindowRef = useRef<Window | null>(null);
   const { toast } = useToast();
-  const queryClient = useQueryClient();
 
-  // Get test suites for dropdown
-  const { data: testSuites } = useQuery<Array<{ id: number; name: string }>>({
-    queryKey: ["/api/test-suites"],
-  });
+  // Establish WebSocket connection
+  useEffect(() => {
+    const socket = new WebSocket("ws://localhost:5501");
 
-  // Save test mutation
-  const saveTestMutation = useMutation({
-    mutationFn: (testData: Partial<Test>) => {
-      return apiRequest("POST", "/api/tests", testData);
-    },
-    onSuccess: (response) => {
-      response.json().then((savedTest) => {
-        setTest(savedTest);
-        queryClient.invalidateQueries({ queryKey: ["/api/tests"] });
-        toast({
-          title: "Test saved",
-          description: "Your test has been saved successfully",
-        });
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error saving test",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
+    socket.onopen = () => {
+      console.log("WebSocket connected");
+      setWs(socket);
+    };
 
-  // Run test mutation
-  const runTestMutation = useMutation({
-    mutationFn: (testId: number) => {
-      return apiRequest("POST", `/api/tests/${testId}/run`, {});
-    },
-    onSuccess: (response) => {
-      response.json().then((results) => {
-        setTestResults(results);
-        toast({
-          title: "Test execution completed",
-          description: `${results.passed} steps passed, ${results.failed} steps failed`,
-        });
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error running test",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      console.log("Message from server:", data);
 
-  const handleRecord = () => {
-    if (!test.name.trim()) {
-      toast({
-        title: "Validation Error",
-        description: "Test name cannot be empty.",
-        variant: "destructive",
-      });
+      switch (data.type) {
+        case "INIT":
+          console.log("WebSocket initialized:", data);
+          setIsRecording(data.isRecording || false);
+          break;
+        case "RECORDING_STARTED":
+          setIsRecording(true);
+          toast({ title: "Recording Started", description: "Recording has started." });
+          break;
+        case "RECORDING_STOPPED":
+          setIsRecording(false);
+          setRecordedSteps(data.steps || []);
+          toast({ title: "Recording Stopped", description: "Recording has stopped." });
+          break;
+        case "ACTION_RECORDED":
+          setRecordedSteps((prev) => [...prev, data.action]);
+          toast({ title: "Action Recorded", description: data.action });
+          break;
+        default:
+          console.warn("Unknown message type:", data.type);
+      }
+    };
+
+    socket.onclose = () => {
+      console.log("WebSocket disconnected");
+      setWs(null);
+    };
+
+    return () => {
+      socket.close();
+    };
+  }, []);
+
+  // Listen for messages from the new window
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return; // Ensure the message is from the same origin
+
+      const { type, action } = event.data;
+      if (type === "ACTION_RECORDED") {
+        setRecordedSteps((prev) => [...prev, action]);
+        toast({ title: "Action Recorded", description: action });
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => {
+      window.removeEventListener("message", handleMessage);
+    };
+  }, []);
+
+  const handleLaunch = () => {
+    if (!/^https?:\/\//.test(targetUrl)) {
+      toast({ title: "Invalid URL", description: "Please provide a valid URL.", variant: "destructive" });
       return;
     }
 
-    setIsRecording(true);
+    // Open the target URL in a new window
+    newWindowRef.current = window.open(
+      targetUrl,
+      "_blank",
+      "width=1200,height=800,scrollbars=yes,resizable=yes"
+    );
 
-    fetch("/api/recording/start", {
-      method: "POST",
-    })
-      .then((res) => res.json())
-      .then(() => {
-        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const ws = new WebSocket(`${protocol}//${window.location.hostname}:5501/ws`);
+    if (newWindowRef.current) {
+      // Inject a script into the new window to start recording actions
+      newWindowRef.current.onload = () => {
+        try {
+          if (newWindowRef.current && newWindowRef.current.document) {
+            const scriptContent = `
+              (function() {
+                const recordAction = (action) => {
+                  window.opener.postMessage({ type: "ACTION_RECORDED", action }, window.location.origin);
+                };
 
-        ws.onopen = () => {
-          console.log("WebSocket connection established");
-        };
+                // Add a recording indicator
+                const recordingIndicator = document.createElement('div');
+                recordingIndicator.style.position = 'fixed';
+                recordingIndicator.style.top = '10px';
+                recordingIndicator.style.right = '10px';
+                recordingIndicator.style.backgroundColor = 'rgba(255, 0, 0, 0.8)';
+                recordingIndicator.style.color = 'white';
+                recordingIndicator.style.padding = '5px 10px';
+                recordingIndicator.style.borderRadius = '5px';
+                recordingIndicator.style.zIndex = '9999';
+                recordingIndicator.innerText = '● Recording';
+                document.body.appendChild(recordingIndicator);
 
-        ws.onerror = (error) => {
-          console.error("WebSocket error:", error);
-          toast({
-            title: "WebSocket Connection Error",
-            description: "Could not establish real-time communication",
-            variant: "destructive",
-          });
-        };
+                // Capture user actions
+                document.addEventListener('click', (event) => {
+                  const target = event.target;
+                  const action = \`Clicked on \${target.tagName}\${target.id ? \`#\${target.id}\` : ""}\`;
+                  recordAction(action);
+                });
 
-        ws.onmessage = (event) => {
-          const data = JSON.parse(event.data);
-          if (data.type === "action") {
-            setLastRecordedAction(data.description);
+                document.addEventListener('input', (event) => {
+                  const target = event.target;
+                  const action = \`Input in \${target.tagName}\${target.id ? \`#\${target.id}\` : ""}\`;
+                  recordAction(action);
+                });
 
-            setTest((prev) => ({
-              ...prev,
-              steps: [...prev.steps, data.step],
-            }));
+                document.addEventListener('keydown', (event) => {
+                  const action = \`Key pressed: \${event.key}\`;
+                  recordAction(action);
+                });
+
+                document.addEventListener('mousemove', (event) => {
+                  const action = \`Mouse moved to: \${event.clientX}, \${event.clientY}\`;
+                  recordAction(action);
+                });
+
+                document.addEventListener('contextmenu', (event) => {
+                  const target = event.target;
+                  const action = \`Right-clicked on \${target.tagName}\${target.id ? \`#\${target.id}\` : ""}\`;
+                  recordAction(action);
+                });
+
+                document.addEventListener('dblclick', (event) => {
+                  const target = event.target;
+                  const action = \`Double-clicked on \${target.tagName}\${target.id ? \`#\${target.id}\` : ""}\`;
+                  recordAction(action);
+                });
+
+                document.addEventListener('dragstart', (event) => {
+                  const target = event.target;
+                  const action = \`Drag started on \${target.tagName}\${target.id ? \`#\${target.id}\` : ""}\`;
+                  recordAction(action);
+                });
+
+                document.addEventListener('drop', (event) => {
+                  const target = event.target;
+                  const action = \`Dropped on \${target.tagName}\${target.id ? \`#\${target.id}\` : ""}\`;
+                  recordAction(action);
+                });
+              })();
+            `;
+            const script = newWindowRef.current.document.createElement("script");
+            script.textContent = scriptContent;
+            newWindowRef.current.document.body.appendChild(script);
+
+            if (ws) {
+              ws.send(JSON.stringify({ type: "START_RECORDING", targetUrl }));
+            }
+
+            toast({ title: "New Window Opened", description: "Recording has started in the new window." });
           }
-        };
-
-        return () => ws.close();
-      })
-      .catch((error) => {
-        toast({
-          title: "Error starting recording",
-          description: error.message,
-          variant: "destructive",
-        });
-        setIsRecording(false);
-      });
-  };
-
-  const handleStopRecording = () => {
-    if (!window.confirm("Are you sure you want to stop recording?")) return;
-
-    setIsRecording(false);
-
-    fetch("/api/recording/stop", {
-      method: "POST",
-    });
-  };
-
-  const handleElementPicker = () => {
-    toast({
-      title: "Element selector activated",
-      description: "Click on any element in your web page to select it",
-    });
-
-    setTimeout(() => {
-      setSelectedElement({
-        selector: '#login-form input[name="username"]',
-        type: "input",
-        tagName: "INPUT",
-        attributes: {
-          type: "text",
-          name: "username",
-          placeholder: "Username",
-        },
-      });
-    }, 1000);
-  };
-
-  const handleSave = () => {
-    saveTestMutation.mutate({
-      name: test.name,
-      suiteId: test.suiteId,
-      steps: test.steps,
-    });
-  };
-
-  const handlePlayback = () => {
-    if (test.id === 0) {
-      saveTestMutation.mutate(
-        {
-          name: test.name,
-          suiteId: test.suiteId,
-          steps: test.steps,
-        },
-        {
-          onSuccess: (response) => {
-            response.json().then((savedTest) => {
-              setTest(savedTest);
-              runTestMutation.mutate(savedTest.id);
-            });
-          }
+        } catch (error) {
+          console.error("Error injecting script into new window:", error);
+          toast({ title: "Error", description: "Failed to inject script into the new window.", variant: "destructive" });
         }
-      );
+      };
     } else {
-      runTestMutation.mutate(test.id);
+      toast({ title: "Failed to Open Window", description: "Please check your browser settings.", variant: "destructive" });
     }
   };
 
-  const handleAction = (action: TestAction) => {
-    if (selectedElement && (action.type === "click" || action.type === "type" || action.type === "verify")) {
-      const newStep: Partial<TestStep> = {
-        type: action.type,
-        order: test.steps.length,
-        selector: selectedElement.selector,
-      };
-
-      if (action.type === "type") {
-        newStep.text = "";
-      } else if (action.type === "verify") {
-        newStep.condition = "exists";
-      }
-
-      setTest((prev) => ({
-        ...prev,
-        steps: [...prev.steps, newStep as TestStep],
-      }));
-
-      toast({
-        title: "Step added",
-        description: `${action.type} action added for element ${selectedElement.selector}`,
-      });
-    } else if (action.type === "navigate") {
-      setTest((prev) => ({
-        ...prev,
-        steps: [
-          ...prev.steps,
-          {
-            id: Date.now(),
-            type: "navigate",
-            order: test.steps.length,
-            url: "https://example.com",
-          },
-        ],
-      }));
-
-      toast({
-        title: "Step added",
-        description: "Navigate action added",
-      });
-    } else if (action.type === "wait") {
-      setTest((prev) => ({
-        ...prev,
-        steps: [
-          ...prev.steps,
-          {
-            id: Date.now(),
-            type: "wait",
-            order: test.steps.length,
-            duration: 1000,
-          },
-        ],
-      }));
-
-      toast({
-        title: "Step added",
-        description: "Wait action added",
-      });
-    } else if (action.type === "scroll") {
-      setTest((prev) => ({
-        ...prev,
-        steps: [
-          ...prev.steps,
-          {
-            id: Date.now(),
-            type: "scroll",
-            order: test.steps.length,
-            direction: "down",
-          },
-        ],
-      }));
-
-      toast({
-        title: "Step added",
-        description: "Scroll action added",
-      });
+  const stopRecording = () => {
+    if (ws) {
+      ws.send(JSON.stringify({ type: "STOP_RECORDING" }));
     }
   };
 
   return (
     <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Test Builder</h1>
-        <p className="text-gray-600">Create, edit, and execute your automated tests</p>
+      <h1 className="text-2xl font-bold">Test Builder</h1>
+      <div className="mb-4">
+        <label>Target URL:</label>
+        <Input value={targetUrl} onChange={(e) => setTargetUrl(e.target.value)} />
       </div>
-
-      <div className="flex mb-6 space-x-4">
-        <div className="bg-white shadow rounded-lg p-4 flex-1 border border-gray-200">
-          <h2 className="text-lg font-medium text-gray-800 mb-2">Quick Actions</h2>
-          <div className="flex space-x-2">
-            <Button onClick={handleRecord} className="bg-primary hover:bg-blue-600 text-white">
-              <CircleIcon className="h-4 w-4 mr-1.5 text-red-500 fill-red-500" />
-              Record
-            </Button>
-            <Button onClick={handlePlayback} variant="outline" className="bg-gray-100 hover:bg-gray-200 text-gray-700">
-              <PlayIcon className="h-4 w-4 mr-1.5" />
-              Play
-            </Button>
-            <Button onClick={handleElementPicker} variant="outline" className="bg-gray-100 hover:bg-gray-200 text-gray-700">
-              <SearchIcon className="h-4 w-4 mr-1.5" />
-              Select Element
-            </Button>
-            <Button onClick={handleSave} variant="outline" className="bg-gray-100 hover:bg-gray-200 text-gray-700">
-              <SaveIcon className="h-4 w-4 mr-1.5" />
-              Save
-            </Button>
-          </div>
-        </div>
-
-        <div className="bg-white shadow rounded-lg p-4 flex-1 border border-gray-200">
-          <h2 className="text-lg font-medium text-gray-800 mb-2">Test Configuration</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Test Name</label>
-              <Input
-                type="text"
-                value={test.name}
-                onChange={(e) => setTest({ ...test, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Test Suite</label>
-              <Select
-                value={test.suiteId.toString()}
-                onValueChange={(value) => setTest({ ...test, suiteId: parseInt(value) })}
-              >
-                <SelectTrigger className="w-full px-3 py-2 border border-gray-300 rounded-md">
-                  <SelectValue placeholder="Select test suite" />
-                </SelectTrigger>
-                <SelectContent>
-                  {testSuites?.map((suite: any) => (
-                    <SelectItem key={suite.id} value={suite.id.toString()}>
-                      {suite.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </div>
+      <div className="mb-4">
+        <Button onClick={handleLaunch}>Launch in New Window</Button>
+        <Button onClick={stopRecording} disabled={!isRecording}>
+          Stop Recording
+        </Button>
       </div>
-
-      <div className="grid grid-cols-3 gap-6">
-        <TestSteps testId={test.id} testSteps={test.steps} />
-
-        <div className="col-span-1">
-          <ActionToolbox onActionSelected={handleAction} />
-          <ElementInspector selectedElement={selectedElement} onSelectElement={handleElementPicker} />
-        </div>
+      <div>
+        <h2>Recorded Steps:</h2>
+        <ul>
+          {recordedSteps.map((step, index) => (
+            <li key={index}>{step}</li>
+          ))}
+        </ul>
       </div>
-
-      <TestResults testResults={testResults} />
-
-      <RecordingModal
-        isOpen={isRecording}
-        onClose={handleStopRecording}
-        onPause={() => {
-          toast({
-            title: "Recording paused",
-            description: "You can resume recording anytime",
-          });
-        }}
-        lastAction={lastRecordedAction}
-      />
     </div>
   );
 }

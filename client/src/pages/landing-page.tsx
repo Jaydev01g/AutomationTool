@@ -1,13 +1,11 @@
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Link, useLocation } from "wouter";
-import { Github, Mail, Smartphone, ArrowRight, ExternalLink, CheckCircle2, ChevronDown, Loader2 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useUser } from "@/context/user-context";
-import { useEffect } from "react";
+import { ArrowRight, ExternalLink, Github, Loader2, Mail, Smartphone } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 
 export default function LandingPage() {
   const [activeTab, setActiveTab] = useState<string>("login");
@@ -573,7 +571,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="mt-12 pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center">
-            <p>© 2025 NextGen Automation. All rights reserved.</p>
+            <p>© 2025 Lumen Technologies. All rights reserved.</p>
             <div className="flex space-x-6 mt-4 md:mt-0">
               <a href="#" className="hover:text-white transition-colors">
                 <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
