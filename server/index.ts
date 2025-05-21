@@ -7,7 +7,6 @@ import apitestRouter from "./apitest";
 import automationRoutes from "./automation";
 import { setupRoutes } from "./routes";
 
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -16,8 +15,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 const httpServer = http.createServer(app);
-app.use("/api",automationRoutes);
-app.use("/api",apitestRouter);
+app.use("/api", automationRoutes);
+app.use("/api", apitestRouter);
 
 const log = console.log;
 const serveStatic = (app: express.Express) => {};
