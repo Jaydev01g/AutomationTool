@@ -2,7 +2,11 @@ import express, { NextFunction, type Request, Response } from "express";
 import http from "http";
 import path from "path";
 import { fileURLToPath } from "url";
-import { registerRoutes } from "./routes";
+import { WebSocketServer } from "ws";
+import apitestRouter from "./apitest";
+import automationRoutes from "./automation";
+import { setupRoutes } from "./routes";
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,13 +16,16 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 const httpServer = http.createServer(app);
+app.use("/api",automationRoutes);
+app.use("/api",apitestRouter);
 
 const log = console.log;
 const serveStatic = (app: express.Express) => {};
 const setupVite = async (app: express.Express, server: http.Server) => {};
 
 (async () => {
-  await registerRoutes(app, httpServer);
+  const wss = new WebSocketServer({ server: httpServer });
+  setupRoutes(app, wss);
 
   const clientBuildPath = path.join(__dirname, "../client/dist");
   app.use(express.static(clientBuildPath));

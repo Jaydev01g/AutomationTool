@@ -1,0 +1,29 @@
+[
+  {
+    "type": "navigate",
+    "url": "https://saucedemo.com",
+    "status": "success"
+  },
+  {
+    "type": "click",
+    "selector": "#user-name",
+    "status": "success"
+  },
+  {
+    "type": "input",
+    "selector": "#user-name",
+    "value": "Test",
+    "status": "success"
+  },
+  {
+    "type": "click",
+    "selector": "#password",
+    "status": "success"
+  },
+  {
+    "type": "input",
+    "selector": "#password",
+    "value": "Testing",
+    "status": "success"
+  }
+]

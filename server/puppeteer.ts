@@ -1,9 +1,9 @@
 import { TestStep } from "@/lib/types";
 import { Test } from "@shared/schema";
+import puppeteer, { Browser, Page } from "puppeteer";
 
-// Mock browser and page for simulation
-let mockBrowser: any = null;
-let mockPage: any = null;
+let browser: Browser | null = null;
+let page: Page | null = null;
 let isRecording = false;
 let actionCallback: ((action: { description: string; step: any }) => void) | null = null;
 
@@ -11,35 +11,24 @@ let actionCallback: ((action: { description: string; step: any }) => void) | nul
  * Start the browser instance
  */
 export async function startBrowser(): Promise<void> {
+  console.log("Starting Puppeteer browser...");
+  browser = await puppeteer.launch({ headless: false }); // Launch browser in non-headless mode
+  page = await browser.newPage(); // Open a new page
   console.log("Browser started for recording/playback");
-
-  mockBrowser = {
-    close: async () => console.log("Browser closed"),
-  };
-
-  mockPage = {
-    goto: async (url: string) => console.log(`Navigated to ${url}`),
-    click: async (selector: string) => console.log(`Clicked on ${selector}`),
-    type: async (selector: string, text: string) => console.log(`Typed "${text}" into ${selector}`),
-    waitForSelector: async (selector: string) => console.log(`Waited for ${selector}`),
-    evaluate: async (fn: Function, ...args: any[]) => console.log("Evaluated JavaScript in page", fn, args),
-    $: async (selector: string) => ({ exists: true }),
-    waitForTimeout: async (ms: number) => console.log(`Waited for ${ms}ms`),
-  };
-
-  isRecording = false;
 }
 
 /**
  * Stop the browser instance
  */
 export async function stopBrowser(): Promise<void> {
-  if (mockBrowser) {
-    console.log("Browser stopped");
-    mockBrowser = null;
-    mockPage = null;
+  if (browser) {
+    console.log("Stopping Puppeteer browser...");
+    await browser.close();
+    browser = null;
+    page = null;
     isRecording = false;
     actionCallback = null;
+    console.log("Browser stopped");
   }
 }
 
@@ -47,7 +36,7 @@ export async function stopBrowser(): Promise<void> {
  * Start recording user actions
  */
 export function recordActions(callback: (action: { description: string; step: any }) => void): void {
-  if (!mockPage) {
+  if (!page) {
     throw new Error("Browser not started");
   }
 
@@ -56,55 +45,61 @@ export function recordActions(callback: (action: { description: string; step: an
 
   console.log("Recording started");
 
-  // Simulate recording actions
-  simulateRecording();
+  // Inject a script into the page to capture user actions
+  injectRecordingScript();
 }
 
 /**
- * Simulate recording actions (for demo purposes)
+ * Inject a script into the page to capture user actions
  */
-function simulateRecording(): void {
-  if (!isRecording || !actionCallback) return;
+async function injectRecordingScript(): Promise<void> {
+  if (!page) {
+    throw new Error("Browser not started");
+  }
 
-  setTimeout(() => {
-    // Simulate navigation
-    actionCallback?.({
-      description: "Navigate to https://example.com",
-      step: {
-        id: Date.now(),
-        type: "navigate",
-        url: "https://example.com",
-        order: 0,  
-    },
+  await page.exposeFunction("recordAction", (action: { description: string; step: any }) => {
+    if (isRecording && actionCallback) {
+      actionCallback(action);
+    }
+  });
+
+  await page.evaluate(() => {
+    document.addEventListener("click", (event) => {
+      const target = event.target as HTMLElement;
+      const action = {
+        description: `Clicked on ${target.tagName}${target.id ? `#${target.id}` : ""}`,
+        step: {
+          type: "click",
+          selector: target.id ? `#${target.id}` : "",
+        },
+      };
+      (window as any).recordAction(action);
     });
 
-    // Simulate click
-    setTimeout(() => {
-      actionCallback?.({
-        description: "Click on #login-button",
+    document.addEventListener("input", (event) => {
+      const target = event.target as HTMLInputElement;
+      const action = {
+        description: `Input in ${target.tagName}${target.id ? `#${target.id}` : ""}`,
         step: {
-          id: Date.now(),
-          type: "click",
-          selector: "#login-button",
-          order: 1,
+          type: "type",
+          selector: target.id ? `#${target.id}` : "",
+          text: target.value,
         },
-      });
+      };
+      (window as any).recordAction(action);
+    });
 
-      // Simulate typing
-      setTimeout(() => {
-        actionCallback?.({
-          description: "Type into #username-field",
-          step: {
-            id: Date.now(),
-            type: "type",
-            selector: "#username-field",
-            text: "testuser@example.com",
-            order: 2,
-          },
-        });
-      }, 2000);
-    }, 2000);
-  }, 1000);
+    document.addEventListener("keydown", (event) => {
+      const action = {
+        description: `Key pressed: ${event.key}`,
+        step: {
+          type: "keydown",
+          key: event.key,
+        },
+      };
+      (window as any).recordAction(action);
+    });
+  });
 }
 
 /**
@@ -123,7 +118,7 @@ export async function playbackTest(test: Test & { steps: TestStep[] }): Promise<
 }> {
   console.log(`Playing back test: ${test.name}`);
 
-  if (!mockBrowser) {
+  if (!browser) {
     await startBrowser();
   }
 
@@ -141,7 +136,7 @@ export async function playbackTest(test: Test & { steps: TestStep[] }): Promise<
   };
 
   try {
-    for (let i = 0; i < (test.steps as TestStep[]).length; i++) {
+    for (let i = 0; i < test.steps.length; i++) {
       const step = test.steps[i];
       const stepStartTime = Date.now();
       let stepPassed = true;
@@ -180,37 +175,37 @@ export async function playbackTest(test: Test & { steps: TestStep[] }): Promise<
  * Execute a single test step
  */
 async function executeStep(step: TestStep): Promise<void> {
-  if (!mockPage) {
+  if (!page) {
     throw new Error("Browser not started");
   }
 
   switch (step.type) {
     case "navigate":
       if (!step.url) throw new Error("URL is required for navigate step");
-      await mockPage.goto(step.url);
+      await page.goto(step.url);
       break;
 
     case "click":
       if (!step.selector) throw new Error("Selector is required for click step");
-      await mockPage.waitForSelector(step.selector);
-      await mockPage.click(step.selector);
+      await page.waitForSelector(step.selector);
+      await page.click(step.selector);
       break;
 
     case "type":
       if (!step.selector) throw new Error("Selector is required for type step");
       if (!step.text) throw new Error("Text is required for type step");
-      await mockPage.waitForSelector(step.selector);
-      await mockPage.type(step.selector, step.text);
+      await page.waitForSelector(step.selector);
+      await page.type(step.selector, step.text);
       break;
 
     case "wait":
       if (!step.duration) throw new Error("Duration is required for wait step");
-      await mockPage.waitForTimeout(step.duration);
+      await new Promise((resolve) => setTimeout(resolve, step.duration));
       break;
 
     case "scroll":
       if (!step.direction) throw new Error("Direction is required for scroll step");
-      await mockPage.evaluate((direction: string) => {
+      await page.evaluate((direction: string) => {
         const scrollAmount = 300;
         switch (direction) {
           case "up":

@@ -1,31 +1,31 @@
-import { useState, useEffect } from "react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useLocation } from "wouter";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useUser } from "@/context/user-context";
-import { 
-  Plus, 
-  GitBranch, 
-  GitMerge, 
-  Clock, 
-  Calendar, 
-  BarChart, 
-  Users, 
-  Settings, 
-  Laptop, 
-  Database, 
-  Globe, 
-  Zap, 
+import {
+  BarChart,
+  Calendar,
+  Clock,
+  Database,
+  GitBranch,
+  GitMerge,
+  Globe,
   Grid,
-  LogOut
+  Laptop,
+  LogOut,
+  Plus,
+  Settings,
+  Users,
+  Zap
 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 
 // Mock data for projects
 const projects = [
@@ -244,6 +244,19 @@ export default function ProjectDashboard() {
 
   const handleSelectProject = (project: any) => {
     setSelectedProject(project);
+
+    if (project.testingTpe=="api") {
+      window.location.href="/api-test";
+    }
+    else if (project.testingType=="drag-drop") {
+      window.location.href="/drag-drop";
+    }
+    else if (project.testingType=="recorder") {
+      window.location.href="/test-recorder";
+    }
+    else{
+      window.location.href="/test-builder";
+    }
   };
 
   const renderProjectContent = () => {
@@ -307,7 +320,11 @@ export default function ProjectDashboard() {
                     className={`cursor-pointer transition-all hover:shadow-md ${
                       selectedTestingMode === "record-play" ? "border-2 border-indigo-500 bg-indigo-50/50" : ""
                     }`}
-                    onClick={() => setSelectedTestingMode("record-play")}
+                    onClick={() =>{ setSelectedTestingMode("record-play");
+                      window.location.href = "/test-recorder";
+                      // Navigate to recorder
+                      // or handle it in the same page
+                    }}
                   >
                     <CardHeader>
                       <CardTitle className="flex items-center text-lg">
@@ -326,7 +343,11 @@ export default function ProjectDashboard() {
                     className={`cursor-pointer transition-all hover:shadow-md ${
                       selectedTestingMode === "drag-drop" ? "border-2 border-indigo-500 bg-indigo-50/50" : ""
                     }`}
-                    onClick={() => setSelectedTestingMode("drag-drop")}
+                    onClick={() =>{ setSelectedTestingMode("drag-drop");
+                      window.location.href = "/drag-drop";
+                      // Navigate to drag-drop builder
+                      // or handle it in the same page
+                    }}
                   >
                     <CardHeader>
                       <CardTitle className="flex items-center text-lg">
